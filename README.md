@@ -131,8 +131,6 @@ streamlit run dashboard/app.py
 - Inkludera byggår och våning från Hemnets detaljsidor
 - Testa GAM (Generalized Additive Model) för tolkbara icke-linjära samband
 - Hyperparameter-tuning med Optuna/GridSearch
-- Deploya dashboarden till Streamlit Cloud
-- Utöka till fler kommuner i Örebro län
 
 ---
 
