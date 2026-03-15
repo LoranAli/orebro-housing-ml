@@ -28,8 +28,10 @@ st.set_page_config(
     layout="wide",
 )
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'processed', 'orebro_housing_clean.csv')
-MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', 'models', 'best_model.pkl')
+DATA_PATH = os.path.join(os.path.dirname(
+    __file__), '..', 'data', 'processed', 'orebro_housing_clean.csv')
+MODEL_PATH = os.path.join(os.path.dirname(
+    __file__), '..', 'models', 'best_model.pkl')
 
 
 # ============================================================
@@ -69,7 +71,7 @@ page = st.sidebar.radio(
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Data:** 6 600 bostäder från Hemnet")
 st.sidebar.markdown("**Period:** 2013–2026")
-st.sidebar.markdown("**Modell:** XGBoost (R² = 0.694)")
+st.sidebar.markdown("**Modell:** XGBoost (R² = 0.739)")
 st.sidebar.markdown("**Område:** Örebro kommun")
 
 
@@ -115,7 +117,8 @@ if page == "📊 Översikt":
             medianpris=('slutpris', 'median'),
             antal=('slutpris', 'count'),
         ).reset_index()
-        area_stats = area_stats[area_stats['antal'] >= 20].nlargest(15, 'medianpris')
+        area_stats = area_stats[area_stats['antal']
+                                >= 20].nlargest(15, 'medianpris')
 
         fig = px.bar(
             area_stats, x="medianpris", y="omrade_clean", orientation="h",
@@ -133,23 +136,27 @@ if page == "📊 Översikt":
 
 elif page == "💰 Prisprediktering":
     st.title("💰 Prisprediktering")
-    st.markdown("Skriv in bostadsfeatures och få ett prisestimat från ML-modellen.")
+    st.markdown(
+        "Skriv in bostadsfeatures och få ett prisestimat från ML-modellen.")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
         boarea = st.slider("Boarea (m²)", 20, 300, 80)
-        antal_rum = st.selectbox("Antal rum", [1, 1.5, 2, 3, 4, 5, 6, 7, 8], index=3)
+        antal_rum = st.selectbox(
+            "Antal rum", [1, 1.5, 2, 3, 4, 5, 6, 7, 8], index=3)
 
     with col2:
         avgift = st.slider("Månadsavgift (kr)", 0, 12000, 4000, step=100,
                            help="Sätt till 0 för villor/äganderätt")
-        bostadstyp = st.selectbox("Bostadstyp", ["Lägenhet", "Villa", "Radhus"])
+        bostadstyp = st.selectbox(
+            "Bostadstyp", ["Lägenhet", "Villa", "Radhus"])
 
     with col3:
         # Hämta tillgängliga områden
         if 'omrade_clean' in df.columns:
-            top_areas = df['omrade_clean'].value_counts().head(15).index.tolist()
+            top_areas = df['omrade_clean'].value_counts().head(
+                15).index.tolist()
             omrade = st.selectbox("Område", ['övrigt'] + sorted(top_areas))
         else:
             omrade = st.selectbox("Område", ["Örebro"])
@@ -210,13 +217,15 @@ elif page == "💰 Prisprediktering":
 
             similar = df[
                 (df['boarea_kvm'].between(boarea - 15, boarea + 15)) &
-                (df['bostadstyp'] == {'Lägenhet': 'lagenheter', 'Villa': 'villor', 'Radhus': 'radhus'}[bostadstyp])
+                (df['bostadstyp'] == {
+                 'Lägenhet': 'lagenheter', 'Villa': 'villor', 'Radhus': 'radhus'}[bostadstyp])
             ]
 
             if len(similar) > 0:
                 col1, col2 = st.columns(2)
                 col1.metric("Liknande bostäder i datan", f"{len(similar)} st")
-                col2.metric("Deras medianpris", f"{similar['slutpris'].median():,.0f} kr")
+                col2.metric("Deras medianpris",
+                            f"{similar['slutpris'].median():,.0f} kr")
 
                 fig = px.histogram(similar, x="slutpris", nbins=30,
                                    title=f"Prisfördelning — liknande {bostadstyp.lower()} ({boarea}±15 m²)",
@@ -245,14 +254,17 @@ elif page == "🔍 Fynd-detektor":
         # Förbered data för prediktion
         top_areas = df['omrade_clean'].value_counts().head(15).index.tolist()
         df_copy = df.copy()
-        df_copy['omrade_grupp'] = df_copy['omrade_clean'].apply(lambda x: x if x in top_areas else 'övrigt')
+        df_copy['omrade_grupp'] = df_copy['omrade_clean'].apply(
+            lambda x: x if x in top_areas else 'övrigt')
 
         numeric_features = ['boarea_kvm', 'antal_rum', 'avgift_kr',
                             'prisforandring_pct', 'sald_ar', 'sald_manad']
         categorical_features = ['bostadstyp', 'omrade_grupp']
 
-        model_input = df_copy[numeric_features + categorical_features + ['slutpris']].dropna()
-        model_encoded = pd.get_dummies(model_input, columns=categorical_features, drop_first=True)
+        model_input = df_copy[numeric_features +
+                              categorical_features + ['slutpris']].dropna()
+        model_encoded = pd.get_dummies(
+            model_input, columns=categorical_features, drop_first=True)
 
         feature_names = model_data['feature_names']
         X_all = model_encoded.drop('slutpris', axis=1)
@@ -264,18 +276,22 @@ elif page == "🔍 Fynd-detektor":
 
         model_encoded['estimerat'] = model_data['model'].predict(X_all)
         model_encoded['avvikelse_pct'] = (
-            (model_encoded['estimerat'] - model_encoded['slutpris']) / model_encoded['estimerat'] * 100
+            (model_encoded['estimerat'] - model_encoded['slutpris']
+             ) / model_encoded['estimerat'] * 100
         ).round(1)
 
-        deals = model_encoded[model_encoded['avvikelse_pct'] >= threshold].sort_values('avvikelse_pct', ascending=False)
+        deals = model_encoded[model_encoded['avvikelse_pct'] >= threshold].sort_values(
+            'avvikelse_pct', ascending=False)
 
         col1, col2 = st.columns(2)
         col1.metric("Potentiella fynd", f"{len(deals)} bostäder")
         col2.metric("Av totalt", f"{len(model_encoded)} analyserade")
 
         if not deals.empty:
-            display_df = deals[['slutpris', 'estimerat', 'avvikelse_pct', 'boarea_kvm', 'antal_rum']].head(20)
-            display_df.columns = ['Slutpris', 'Estimerat värde', 'Undervärdering %', 'Boarea m²', 'Rum']
+            display_df = deals[['slutpris', 'estimerat',
+                                'avvikelse_pct', 'boarea_kvm', 'antal_rum']].head(20)
+            display_df.columns = [
+                'Slutpris', 'Estimerat värde', 'Undervärdering %', 'Boarea m²', 'Rum']
 
             st.dataframe(
                 display_df,
@@ -305,7 +321,8 @@ elif page == "🔍 Fynd-detektor":
 elif page == "📈 Marknadsanalys":
     st.title("📈 Marknadsanalys — Örebro kommun")
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Pristrender", "Säsongsvariation", "Områdesjämförelse", "Budkrig"])
+    tab1, tab2, tab3, tab4 = st.tabs(
+        ["Pristrender", "Säsongsvariation", "Områdesjämförelse", "Budkrig"])
 
     with tab1:
         if 'sald_datum' in df.columns:
@@ -332,7 +349,8 @@ elif page == "📈 Marknadsanalys":
 
             months = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun',
                       'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec']
-            seasonal['manad'] = seasonal['sald_manad'].map(dict(enumerate(months, 1)))
+            seasonal['manad'] = seasonal['sald_manad'].map(
+                dict(enumerate(months, 1)))
 
             fig = go.Figure()
             fig.add_bar(x=seasonal['manad'], y=seasonal['antal'],
@@ -343,7 +361,8 @@ elif page == "📈 Marknadsanalys":
             fig.update_layout(
                 title='Säsongsvariation',
                 yaxis=dict(title='Antal'),
-                yaxis2=dict(title='Medianpris (kr)', overlaying='y', side='right'),
+                yaxis2=dict(title='Medianpris (kr)',
+                            overlaying='y', side='right'),
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -378,7 +397,8 @@ elif page == "📈 Marknadsanalys":
 
                 fig = px.bar(budkrig_typ, x='bostadstyp', y='andel_budkrig',
                              title='Andel budkrig per bostadstyp',
-                             labels={'andel_budkrig': 'Andel budkrig (%)', 'bostadstyp': ''},
+                             labels={
+                                 'andel_budkrig': 'Andel budkrig (%)', 'bostadstyp': ''},
                              color='andel_budkrig', color_continuous_scale='Reds')
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -390,6 +410,7 @@ elif page == "📈 Marknadsanalys":
 
                     fig = px.bar(budkrig_sas, x='sasong', y='andel_budkrig',
                                  title='Andel budkrig per säsong',
-                                 labels={'andel_budkrig': 'Andel budkrig (%)', 'sasong': ''},
+                                 labels={
+                                     'andel_budkrig': 'Andel budkrig (%)', 'sasong': ''},
                                  color='andel_budkrig', color_continuous_scale='Greens')
                     st.plotly_chart(fig, use_container_width=True)
