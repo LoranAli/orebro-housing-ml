@@ -26,10 +26,10 @@ En komplett ML-driven bostadsanalys för Örebro kommun med **prisprediktering**
 
 | Modell | MAE (kr) | R² | MAPE |
 |--------|----------|-----|------|
-| Linear Regression | ~580 000 | 0.712 | ~25% |
-| Ridge Regression | ~580 000 | 0.712 | ~25% |
-| Random Forest | ~560 000 | 0.713 | ~24% |
-| **XGBoost** | **~520 000** | **0.739** | **~21%** |
+| Linear Regression | ~578 000 | 0.712 | ~23% |
+| Ridge Regression | ~578 000 | 0.712 | ~23% |
+| Random Forest | ~537 000 | 0.713 | ~21% |
+| **XGBoost** | **~502 000** | **0.739** | **~19%** |
 
 Modell: XGBoost (R² = 0.739)
 
