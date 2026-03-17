@@ -21,6 +21,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import joblib
 import os
+from datetime import datetime
 
 # ============================================================
 # KONFIGURATION & STYLING
@@ -384,12 +385,16 @@ elif page == "💰 Prisprediktering":
         boarea = st.slider("Boarea (m²)", 20, 300, 80)
         antal_rum = st.selectbox(
             "Antal rum", [1, 1.5, 2, 3, 4, 5, 6, 7, 8], index=3)
+        bostad_alder = st.slider("Byggnadsår", 1900, 2026, 1990,
+                                  help="Årets datum - byggnadsår = bostadens ålder")
 
     with col2:
         avgift = st.slider("Månadsavgift (kr)", 0, 12000, 4000, step=100,
                            help="Sätt till 0 för villor/äganderätt")
         bostadstyp = st.selectbox(
             "Bostadstyp", ["Lägenhet", "Villa", "Radhus"])
+        vaning = st.number_input("Våning", min_value=0, max_value=20, value=2,
+                                  help="0 för villa/radhus")
 
     with col3:
         if model_data is not None:
@@ -406,6 +411,14 @@ elif page == "💰 Prisprediktering":
             omrade = st.selectbox("Område", ["Örebro"])
         sald_ar = st.selectbox("År (för estimat)", [2024, 2025, 2026], index=2)
 
+    col4, col5, col6 = st.columns(3)
+    with col4:
+        har_balkong = st.checkbox("🏗️ Balkong/uteplats", value=bostadstyp == "Lägenhet")
+    with col5:
+        har_garage = st.checkbox("🚗 Garage/carport", value=bostadstyp == "Villa")
+    with col6:
+        renoverad = st.checkbox("🔨 Renoverad")
+
     if st.button("🔮 Beräkna prisestimat", type="primary", use_container_width=True):
         if model_data is not None:
             features = {
@@ -414,20 +427,18 @@ elif page == "💰 Prisprediktering":
                 'avgift_kr': avgift,
                 'prisforandring_pct': 0,
                 'sald_ar': sald_ar,
-                'sald_manad': 6,
+                'sald_manad': datetime.now().month,
             }
 
-            # Nya features med defaults
-            features['bostad_alder'] = df['bostad_alder'].median(
-            ) if 'bostad_alder' in df.columns else 48
+            features['bostad_alder'] = datetime.now().year - bostad_alder
             features['har_hiss'] = 1 if bostadstyp == "Lägenhet" else 0
-            features['har_balkong'] = 1 if bostadstyp == "Lägenhet" else 0
-            features['har_garage'] = 1 if bostadstyp == "Villa" else 0
-            features['renoverad'] = 0
+            features['har_balkong'] = int(har_balkong)
+            features['har_garage'] = int(har_garage)
+            features['renoverad'] = int(renoverad)
             features['driftkostnad_ar'] = df['driftkostnad_ar'].median(
             ) if 'driftkostnad_ar' in df.columns else 15000
             features['tomtarea_kvm'] = 800 if bostadstyp == "Villa" else 0
-            features['vaning'] = 2 if bostadstyp == "Lägenhet" else 0
+            features['vaning'] = vaning
             features['antal_besok'] = df['antal_besok'].median(
             ) if 'antal_besok' in df.columns else 3500
 

@@ -329,7 +329,15 @@ def main():
 
     # ============================================================
     # STEG 5: PUSHA TILL GITHUB → STREAMLIT UPPDATERAS
+    # (Hoppas över om körning sker via GitHub Actions — Actions gör push själv)
     # ============================================================
+    if os.environ.get('GITHUB_ACTIONS'):
+        log('Kör på GitHub Actions — push hanteras av workflow.')
+        log('=' * 50)
+        log(f'KLART! {len(df_scored)} annonser bedömda.')
+        log('=' * 50)
+        return
+
     log('Pushar till GitHub...')
     try:
         commit_msg = f'Auto-update live listings {datetime.now().strftime("%Y-%m-%d %H:%M")}'
