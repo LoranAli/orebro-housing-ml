@@ -21,6 +21,7 @@ import re
 import json
 import os
 import sys
+import subprocess
 import joblib
 from datetime import datetime
 
@@ -325,7 +326,28 @@ def main():
     history_file = os.path.join(HISTORY_DIR, f'listings_{datetime.now().strftime("%Y%m%d")}.csv')
     df_scored[save_cols].to_csv(history_file, index=False, encoding='utf-8-sig')
     log(f'Historik: {history_file}')
-    
+
+    # ============================================================
+    # STEG 5: PUSHA TILL GITHUB → STREAMLIT UPPDATERAS
+    # ============================================================
+    log('Pushar till GitHub...')
+    try:
+        commit_msg = f'Auto-update live listings {datetime.now().strftime("%Y-%m-%d %H:%M")}'
+        cmds = [
+            ['git', '-C', PROJECT_DIR, 'add', '-f', OUTPUT_PATH],
+            ['git', '-C', PROJECT_DIR, 'commit', '-m', commit_msg],
+            ['git', '-C', PROJECT_DIR, 'push'],
+        ]
+        for cmd in cmds:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0 and 'nothing to commit' not in result.stdout:
+                log(f'  Git-fel: {result.stderr.strip()}')
+                break
+        else:
+            log('  GitHub uppdaterat — Streamlit hämtar ny data inom ~1 minut.')
+    except Exception as e:
+        log(f'  Push misslyckades: {e}')
+
     log('=' * 50)
     log(f'KLART! {len(df_scored)} annonser bedömda.')
     log('=' * 50)
