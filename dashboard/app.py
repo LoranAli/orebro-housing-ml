@@ -468,11 +468,10 @@ elif page == "🔍 Live Fynd":
         st.markdown('<div class="custom-divider"></div>',
                     unsafe_allow_html=True)
 
-        # Datum + varning om statisk data
+        # Datum + automatisk uppdatering-info
         if 'scrape_datum' in df_active.columns:
-            st.caption(
-                f"Senast uppdaterad: {df_active['scrape_datum'].iloc[0]}")
-        st.info("ℹ️ Datan uppdateras inte automatiskt. Kör scraper-skriptet för att hämta aktuella annonser.")
+            senast = df_active['scrape_datum'].iloc[0]
+            st.success(f"✅ Senast uppdaterad: **{senast}** — uppdateras automatiskt varje dag kl 08:00")
 
         # KPI:er
         col1, col2, col3, col4 = st.columns(4)
