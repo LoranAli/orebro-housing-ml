@@ -356,13 +356,13 @@ if page == "📊 Översikt":
                     'sald_datum': 'Datum', 'omrade_clean': 'Område',
                     'bostadstyp_label': 'Typ', 'slutpris': 'Slutpris',
                     'pris_per_kvm': 'kr/m²', 'boarea_kvm': 'Boarea m²',
-                    'antal_rum': 'Rum', 'prisforandring_pct': 'Budkrig %'
+                    'antal_rum': 'Rum', 'prisforandring_pct': 'Prisskillnad %'
                 }),
                 use_container_width=True, height=350,
                 column_config={
                     "Slutpris": st.column_config.NumberColumn(format="%d kr"),
                     "kr/m²": st.column_config.NumberColumn(format="%d kr"),
-                    "Budkrig %": st.column_config.NumberColumn(format="%.1f%%"),
+                    "Prisskillnad %": st.column_config.NumberColumn(format="%.1f%%"),
                 }
             )
         else:
@@ -375,7 +375,7 @@ if page == "📊 Översikt":
 
 elif page == "💰 Prisprediktering":
     st.markdown("# 💰 Prisprediktering")
-    st.markdown("Få ett AI-baserat prisestimat för valfri bostad i Örebro")
+    st.markdown("Få ett prisestimat för valfri bostad i Örebro")
 
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
@@ -385,7 +385,7 @@ elif page == "💰 Prisprediktering":
         boarea = st.slider("Boarea (m²)", 20, 300, 80)
         antal_rum = st.selectbox(
             "Antal rum", [1, 1.5, 2, 3, 4, 5, 6, 7, 8], index=3)
-        bostad_alder = st.slider("Byggnadsår", 1900, 2026, 1990,
+        bostad_alder = st.slider("Byggnadsår", 1950, 2026, 1990,
                                   help="Årets datum - byggnadsår = bostadens ålder")
 
     with col2:
@@ -639,7 +639,7 @@ elif page == "🔍 Live Fynd":
             "Avvikelse %": st.column_config.NumberColumn(format="%.1f%%"),
         }
         if has_url:
-            col_config["Hemnet"] = st.column_config.LinkColumn("Hemnet 🔗")
+            col_config["Hemnet"] = st.column_config.LinkColumn(label="Hemnet 🔗", display_text="Öppna")
 
         st.dataframe(
             df_display,
@@ -700,34 +700,22 @@ elif page == "🗺️ Karta":
 
             st.caption(f"Visar {len(map_df):,} av {len(map_df_cached):,} bostäder")
 
-            kartlage = st.radio("Kartläge", ["📍 Punktkarta", "🔥 Heatmap"],
-                                horizontal=True, key="kartlage")
-
             map_df = map_df.copy()
             map_df['boarea_kvm'] = map_df['boarea_kvm'].fillna(map_df['boarea_kvm'].median())
             map_df['pris_per_kvm'] = map_df['pris_per_kvm'].fillna(map_df['pris_per_kvm'].median())
             map_df['latitude'] = map_df['latitude'] + np.random.uniform(-0.002, 0.002, len(map_df))
             map_df['longitude'] = map_df['longitude'] + np.random.uniform(-0.002, 0.002, len(map_df))
 
-            if kartlage == "📍 Punktkarta":
-                fig = px.scatter_mapbox(
-                    map_df, lat="latitude", lon="longitude",
-                    color="pris_per_kvm", size="boarea_kvm",
-                    color_continuous_scale=["#1a1f2e", "#667eea", "#00D4AA", "#feca57", "#ff6b6b"],
-                    size_max=15, zoom=10,
-                    hover_name="omrade_clean" if 'omrade_clean' in map_df.columns else None,
-                    hover_data={'slutpris': ':,.0f', 'boarea_kvm': ':.0f', 'bostadstyp': True},
-                    title="Sålda bostäder — pris per m²",
-                    mapbox_style="carto-darkmatter",
-                )
-            else:
-                fig = px.density_mapbox(
-                    map_df, lat="latitude", lon="longitude",
-                    z="pris_per_kvm", radius=18, zoom=10,
-                    color_continuous_scale=["#1a1f2e", "#667eea", "#00D4AA", "#feca57", "#ff6b6b"],
-                    title="Heatmap — prisintensitet per m²",
-                    mapbox_style="carto-darkmatter",
-                )
+            fig = px.scatter_mapbox(
+                map_df, lat="latitude", lon="longitude",
+                color="pris_per_kvm", size="boarea_kvm",
+                color_continuous_scale=["#1a1f2e", "#667eea", "#00D4AA", "#feca57", "#ff6b6b"],
+                size_max=15, zoom=10,
+                hover_name="omrade_clean" if 'omrade_clean' in map_df.columns else None,
+                hover_data={'slutpris': ':,.0f', 'boarea_kvm': ':.0f', 'bostadstyp': True},
+                title="Sålda bostäder — pris per m²",
+                mapbox_style="carto-darkmatter",
+            )
             fig.update_layout(
                 height=600, paper_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0e0e0'))
             st.plotly_chart(fig, use_container_width=True)
@@ -932,7 +920,7 @@ elif page == "📈 Marknadsanalys":
 
             col1, col2 = st.columns([1, 2])
             with col1:
-                top_n = st.slider("Visa topp N områden", 5, 20, 10, key="score_n")
+                top_n = st.slider("Visa topp N områden", 5, 40, 20, key="score_n")
                 visa_omr = omr_stats.nlargest(top_n, 'totalscore')[
                     ['omrade_clean', 'totalscore', 'medianpris', 'pristrend', 'budkrig']
                 ].rename(columns={
@@ -1184,7 +1172,7 @@ elif page == "🏦 Köpkalkyl":
                 st.markdown(f"**{namn}:** {belopp:,} kr")
             st.markdown(f"*Mäklararvode (ca 2.5%, betalas av säljare):* ~{maklararv:,} kr*")
             st.markdown(f"### Totalt extra: **{total_extra:,} kr**")
-            st.markdown(f"### Allt-i-ett: **{kop2 + total_extra:,} kr**")
+            st.markdown(f"### Total kontantkostnad: **{kop2 + total_extra:,} kr**")
             st.caption("*Mäklararvodet betalas normalt av säljaren och ingår ej i totalen.")
 
 
