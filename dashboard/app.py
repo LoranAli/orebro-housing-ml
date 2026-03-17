@@ -202,15 +202,20 @@ if page == "📊 Översikt":
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
     # Prisfördelning + Boxplot
+    TYP_LABELS = {'lagenheter': 'Lägenheter', 'villor': 'Villor', 'radhus': 'Radhus'}
+    COLOR_MAP = {'Lägenheter': '#00D4AA', 'Villor': '#667eea', 'Radhus': '#ff6b6b'}
+
     col1, col2 = st.columns(2)
 
     with col1:
+        df_plot = df.copy()
+        df_plot['bostadstyp'] = df_plot['bostadstyp'].map(TYP_LABELS)
         fig = px.histogram(
-            df, x="slutpris", color="bostadstyp", nbins=50,
+            df_plot, x="slutpris", color="bostadstyp", nbins=50,
             title="Prisfördelning per bostadstyp",
-            labels={"slutpris": "Slutpris (kr)", "count": "Antal"},
+            labels={"slutpris": "Slutpris (kr)", "count": "Antal", "bostadstyp": "Typ"},
             barmode="overlay", opacity=0.7,
-            color_discrete_sequence=['#00D4AA', '#667eea', '#ff6b6b']
+            color_discrete_map=COLOR_MAP,
         )
 
         fig.update_layout(
@@ -225,15 +230,16 @@ if page == "📊 Översikt":
     with col2:
         # Prisutveckling senaste åren (lättförståelig linjegraf)
         if 'sald_ar' in df.columns:
-            yearly = df.groupby(['sald_ar', 'bostadstyp'])[
+            yearly = df.copy()
+            yearly['bostadstyp'] = yearly['bostadstyp'].map(TYP_LABELS)
+            yearly = yearly.groupby(['sald_ar', 'bostadstyp'])[
                 'slutpris'].median().reset_index()
             yearly = yearly[yearly['sald_ar'] >= 2018]
             fig = px.line(
                 yearly, x="sald_ar", y="slutpris", color="bostadstyp",
                 title="Prisutveckling per år",
-                labels={"sald_ar": "År",
-                        "slutpris": "Medianpris (kr)", "bostadstyp": "Typ"},
-                color_discrete_sequence=['#00D4AA', '#667eea', '#ff6b6b'],
+                labels={"sald_ar": "År", "slutpris": "Medianpris (kr)", "bostadstyp": "Typ"},
+                color_discrete_map=COLOR_MAP,
                 markers=True,
             )
             fig.update_layout(
@@ -388,11 +394,13 @@ elif page == "💰 Prisprediktering":
 
                 fig = px.histogram(similar, x="slutpris", nbins=30,
                                    title=f"Prisfördelning — {bostadstyp.lower()} ({boarea}±15 m²)",
+                                   labels={"slutpris": "Slutpris (kr)", "count": "Antal"},
                                    color_discrete_sequence=['#00D4AA'])
                 fig.add_vline(x=estimate, line_dash="dash", line_color="#ff6b6b",
                               annotation_text=f"Ditt estimat: {estimate:,} kr")
                 fig.update_layout(
-                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    yaxis_title="Antal")
                 st.plotly_chart(fig, use_container_width=True)
         else:
             st.error("Modellen kunde inte laddas.")
@@ -487,6 +495,37 @@ elif page == "🔍 Live Fynd":
 elif page == "🗺️ Karta":
     st.markdown("# 🗺️ Bostadskarta — Örebro")
 
+    FALLBACK_LAT, FALLBACK_LON = 59.2753, 15.2134
+
+    # Hjälpfunktion: slå upp koordinat med prefix-strippning
+    def lookup_coords(area_name, coords_df):
+        if coords_df is None or pd.isna(area_name):
+            return None, None
+        # Filtrera bort poster med fallback-koordinat så de inte blockerar prefix-match
+        good_coords = coords_df[
+            ~((coords_df['lat'].round(4) == round(FALLBACK_LAT, 4)) &
+              (coords_df['lon'].round(4) == round(FALLBACK_LON, 4)))
+        ]
+        # Direkt match (utan fallback-poster)
+        match = good_coords[good_coords['omrade'].str.lower() == str(area_name).lower()]
+        if len(match) > 0:
+            return match.iloc[0]['lat'], match.iloc[0]['lon']
+        # Strippa vanliga prefix och försök igen
+        prefixes = ['Radhus ', 'Lägenhet ', 'Villa ', 'Fritidshus ',
+                    'Gård/Skog ', 'a Radhus ', 'b Radhus ', 'c Radhus ',
+                    'a Lägenhet ', 'b Lägenhet ', 'c Lägenhet ']
+        for prefix in prefixes:
+            if str(area_name).startswith(prefix):
+                stripped = area_name[len(prefix):]
+                match = good_coords[good_coords['omrade'].str.lower() == stripped.lower()]
+                if len(match) > 0:
+                    return match.iloc[0]['lat'], match.iloc[0]['lon']
+        # Partiell match — hitta känt område som ingår i namnet
+        for _, row in good_coords.iterrows():
+            if len(row['omrade']) > 4 and row['omrade'].lower() in str(area_name).lower():
+                return row['lat'], row['lon']
+        return None, None
+
     # Karta med historiska data
     if 'latitude' in df.columns and 'longitude' in df.columns:
         tab1, tab2 = st.tabs(["Sålda bostäder", "Aktiva annonser"])
@@ -495,6 +534,20 @@ elif page == "🗺️ Karta":
             st.markdown("Alla sålda bostäder färgkodade efter pris per m²")
 
             map_df = df[df['latitude'].notna() & (df['latitude'] != 0)].copy()
+
+            # Förbättra koordinater för bostäder med fallback-koordinat
+            if df_coords is not None and 'omrade_clean' in map_df.columns:
+                fallback_mask = (
+                    (map_df['latitude'].round(4) == round(FALLBACK_LAT, 4)) &
+                    (map_df['longitude'].round(4) == round(FALLBACK_LON, 4))
+                )
+                for idx in map_df[fallback_mask].index:
+                    area = map_df.at[idx, 'omrade_clean']
+                    lat, lon = lookup_coords(area, df_coords)
+                    if lat is not None:
+                        map_df.at[idx, 'latitude'] = lat
+                        map_df.at[idx, 'longitude'] = lon
+
             # Fyll NaN i size och color kolumner
             map_df['boarea_kvm'] = map_df['boarea_kvm'].fillna(
                 map_df['boarea_kvm'].median())
