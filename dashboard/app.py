@@ -435,7 +435,7 @@ elif page == "🔍 Live Fynd":
                     unsafe_allow_html=True)
 
         # Filter
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
             bed_filter = st.multiselect(
                 "Bedömning",
@@ -449,15 +449,12 @@ elif page == "🔍 Live Fynd":
                 df_active['bostadstyp'].unique().tolist(),
                 default=df_active['bostadstyp'].unique().tolist()
             )
-        with col3:
-            max_pris = st.slider("Max utgångspris (Mkr)",
-                                 0.5, 15.0, 10.0, step=0.5)
 
         # Filtrera
         filtered = df_active[
             (df_active['bedomning'].isin(bed_filter)) &
-            (df_active['bostadstyp'].isin(typ_filter)) &
-            (df_active['utgangspris'] <= max_pris * 1e6)
+            (df_active['bostadstyp'].isin(typ_filter))
+
         ].sort_values('skillnad_pct', ascending=False)
 
         st.markdown(f"**Visar {len(filtered)} av {len(df_active)} annonser**")
@@ -481,23 +478,6 @@ elif page == "🔍 Live Fynd":
                 "Avvikelse %": st.column_config.NumberColumn(format="%.1f%%"),
             }
         )
-
-        # Fördelningsgraf
-        fig = px.histogram(
-            df_active, x="skillnad_pct", nbins=50,
-            title="Fördelning av prisavvikelser (alla annonser)",
-            labels={"skillnad_pct": "Avvikelse (%)"},
-            color_discrete_sequence=['#667eea']
-        )
-        fig.add_vline(x=0, line_dash="dash",
-                      line_color="#ff6b6b", annotation_text="0%")
-        fig.add_vline(x=15, line_dash="dash", line_color="#00D4AA",
-                      annotation_text="Fynd-gräns")
-        fig.update_layout(template="plotly_dark",
-                          paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("Inga aktiva annonser laddade. Kör 05_live_deals.ipynb först.")
 
 
 # ============================================================
