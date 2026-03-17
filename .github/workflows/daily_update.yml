@@ -1,0 +1,40 @@
+name: Daily Live Listings Update
+
+on:
+  schedule:
+    - cron: '0 7 * * *'   # 07:00 UTC = 08:00 svensk tid (CET vintertid)
+  workflow_dispatch:       # Tillåt manuell körning från GitHub UI
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y google-chrome-stable
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily update
+        run: python scripts/daily_update.py
+        env:
+          GITHUB_ACTIONS: "true"   # Skriptet hoppar över git push när detta är satt
+
+      - name: Commit and push updated listings
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f data/processed/active_listings_scored.csv
+          git diff --staged --quiet && echo "Ingen ny data" || \
+            git commit -m "Auto-update live listings $(date +%Y-%m-%d)" && git push
