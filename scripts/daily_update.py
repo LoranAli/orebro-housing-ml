@@ -52,83 +52,81 @@ def log(msg):
 # ============================================================
 
 def scrape_active():
-    """Scrapa alla aktiva annonser från Hemnet."""
+    """Scrapa alla aktiva annonser från Hemnet med requests (ingen webbläsare krävs)."""
+    import requests
     from bs4 import BeautifulSoup
-    from selenium import webdriver
-    from selenium.webdriver.chrome.service import Service
-    from selenium.webdriver.chrome.options import Options
-    from webdriver_manager.chrome import ChromeDriverManager
-    
-    def create_driver():
-        options = Options()
-        options.add_argument('--headless=new')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--window-size=1920,1080')
-        options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
-                             'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-        service = Service(ChromeDriverManager().install())
-        return webdriver.Chrome(service=service, options=options)
-    
-    def scrape_page(driver, url):
-        driver.get(url)
-        time.sleep(random.uniform(2, 4))
-        soup = BeautifulSoup(driver.page_source, 'lxml')
-        cards = soup.find_all('a', href=re.compile(r'/bostad/'))
-        listings = []
-        for card in cards:
-            text = card.get_text(' ', strip=True)
-            if len(text) < 10:
-                continue
-            listing = {'raw_text': text, 'url': 'https://www.hemnet.se' + card.get('href', '')}
-            price_match = re.search(r'([\d\s]+)\s*kr', text)
-            if price_match:
-                p = price_match.group(1).replace(' ', '').replace('\xa0', '')
-                try:
-                    listing['utgangspris'] = int(p)
-                except:
-                    pass
-            area_match = re.search(r'([\d,\.]+)\s*m[²2]', text)
-            if area_match:
-                listing['boarea_kvm'] = float(area_match.group(1).replace(',', '.'))
-            rooms_match = re.search(r'([\d,]+)\s*rum', text)
-            if rooms_match:
-                listing['antal_rum'] = float(rooms_match.group(1).replace(',', '.'))
-            fee_match = re.search(r'([\d\s]+)\s*kr/m[åa]n', text)
-            if fee_match:
-                f = fee_match.group(1).replace(' ', '').replace('\xa0', '')
-                try:
-                    listing['avgift_kr'] = int(f)
-                except:
-                    pass
-            if listing.get('utgangspris') and listing.get('utgangspris') > 100000:
-                listings.append(listing)
-        return listings
-    
+
+    HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
+                      '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept-Language': 'sv-SE,sv;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Referer': 'https://www.hemnet.se/',
+    }
+    session = requests.Session()
+    session.headers.update(HEADERS)
+
+    def scrape_page(url):
+        try:
+            resp = session.get(url, timeout=15)
+            if resp.status_code != 200:
+                log(f'    HTTP {resp.status_code} för {url}')
+                return []
+            soup = BeautifulSoup(resp.text, 'lxml')
+            cards = soup.find_all('a', href=re.compile(r'/bostad/'))
+            listings = []
+            for card in cards:
+                text = card.get_text(' ', strip=True)
+                if len(text) < 10:
+                    continue
+                listing = {'raw_text': text, 'url': 'https://www.hemnet.se' + card.get('href', '')}
+                price_match = re.search(r'([\d\s\xa0]+)\s*kr', text)
+                if price_match:
+                    p = price_match.group(1).replace(' ', '').replace('\xa0', '')
+                    try:
+                        listing['utgangspris'] = int(p)
+                    except:
+                        pass
+                area_match = re.search(r'([\d,\.]+)\s*m[²2]', text)
+                if area_match:
+                    listing['boarea_kvm'] = float(area_match.group(1).replace(',', '.'))
+                rooms_match = re.search(r'([\d,]+)\s*rum', text)
+                if rooms_match:
+                    listing['antal_rum'] = float(rooms_match.group(1).replace(',', '.'))
+                fee_match = re.search(r'([\d\s\xa0]+)\s*kr/m[åa]n', text)
+                if fee_match:
+                    f = fee_match.group(1).replace(' ', '').replace('\xa0', '')
+                    try:
+                        listing['avgift_kr'] = int(f)
+                    except:
+                        pass
+                if listing.get('utgangspris') and listing.get('utgangspris') > 100000:
+                    listings.append(listing)
+            return listings
+        except Exception as e:
+            log(f'    Fel vid {url}: {e}')
+            return []
+
     URLS = {
         'lagenheter': 'https://www.hemnet.se/till-salu/lagenhet/orebro-kommun',
         'villor': 'https://www.hemnet.se/till-salu/villa/orebro-kommun',
         'radhus': 'https://www.hemnet.se/till-salu/radhus/orebro-kommun',
     }
-    
-    driver = create_driver()
+
     all_active = []
-    
-    try:
-        for typ, base_url in URLS.items():
-            log(f'  Scrapar {typ}...')
-            for page in range(1, 11):
-                url = f'{base_url}?page={page}'
-                listings = scrape_page(driver, url)
-                if not listings:
-                    break
-                for l in listings:
-                    l['bostadstyp'] = typ
-                all_active.extend(listings)
-            log(f'  {typ}: {sum(1 for l in all_active if l["bostadstyp"] == typ)} annonser')
-    finally:
-        driver.quit()
-    
+    for typ, base_url in URLS.items():
+        log(f'  Scrapar {typ}...')
+        for page in range(1, 11):
+            url = f'{base_url}?page={page}'
+            listings = scrape_page(url)
+            if not listings:
+                break
+            for l in listings:
+                l['bostadstyp'] = typ
+            all_active.extend(listings)
+            time.sleep(random.uniform(1, 2))
+        log(f'  {typ}: {sum(1 for l in all_active if l["bostadstyp"] == typ)} annonser')
+
     return pd.DataFrame(all_active)
 
 

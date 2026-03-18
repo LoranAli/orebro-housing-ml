@@ -18,22 +18,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Chrome
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y google-chrome-stable
-
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install selenium webdriver-manager
-          python -c "import selenium; print('selenium OK:', selenium.__version__)"
-
-      - name: Verify selenium
-        run: |
-          python -c "import selenium; print('selenium OK:', selenium.__version__)"
-          python -m pip show selenium
 
       - name: Run daily update
         run: python scripts/daily_update.py 2>&1
