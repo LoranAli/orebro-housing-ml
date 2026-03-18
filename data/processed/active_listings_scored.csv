@@ -1,5 +1,12 @@
 ﻿url,omrade,bostadstyp,utgangspris,estimerat_varde,skillnad_kr,skillnad_pct,bedomning,boarea_kvm,antal_rum,avgift_kr,scrape_datum
 https://www.hemnet.se/bostad/lagenhet-2rum-sodra-ladugardsangen-orebro-kommun-lillbackavagen-7-21674197,Ladugårdsängen,lagenheter,1795000,1.1926628e+06,-602337.25,-50.5,🔴 Överprissatt,63.0,2.0,64834.0,2026-03-18
+https://www.hemnet.se/bostad/lagenhet-2rum-norr-orebro-kommun-schantzgatan-10c-21661734,Norr,lagenheter,895000,984557.3,89557.3125,9.1,🟡 Rimligt pris,41.0,2.0,33311.0,2026-03-18
+https://www.hemnet.se/bostad/lagenhet-2rum-ormesta-orebro-kommun-alholmsgatan-15-studentvanlig-21325143,Ormesta,lagenheter,995000,956206.8,-38793.1875,-4.1,🟡 Rimligt pris,35.0,2.0,53869.0,2026-03-18
+https://www.hemnet.se/bostad/lagenhet-1rum-rynningeasen-orebro-kommun-pionjargatan-12-21689467,Rynningeåsen,lagenheter,850000,990987.9,140987.875,14.2,🟡 Rimligt pris,28.5,1.0,52834.0,2026-03-18
+https://www.hemnet.se/bostad/lagenhet-2rum-centralt-vaster-orebro-kommun-hertig-karls-alle-56-b-21659318,Centralt Väster,lagenheter,725000,1.03855856e+06,313558.5625,30.2,🟢 Potentiellt fynd,42.0,2.0,35069.0,2026-03-18
+https://www.hemnet.se/bostad/lagenhet-1rum-sodra-lindhult-orebro-kommun-bonstorpsvagen-14-21578004,Södra Lindhult,lagenheter,1095000,916446.3,-178553.6875,-19.5,🔴 Överprissatt,41.0,1.0,43628.0,2026-03-18
+https://www.hemnet.se/bostad/lagenhet-3rum-bettorp-orebro-kommun-markorvagen-18-21523866,Bettorp,lagenheter,1495000,1.5116482e+06,16648.25,1.1,🟡 Rimligt pris,78.0,3.0,46318.0,2026-03-18
+https://www.hemnet.se/bostad/lagenhet-2rum-ladugardsangen-orebro-kommun-termikgatan-23a-21435309,Ladugårdsängen,lagenheter,1595000,1.107933e+06,-487067.0,-44.0,🔴 Överprissatt,56.2,2.0,64715.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-ormesta-orebro-kommun-olofsgatan-11-21619510,Ormesta,lagenheter,1345000,1.0046601e+06,-340339.875,-33.9,🔴 Överprissatt,43.0,2.0,43468.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-3rum-adolfsberg-orebro-kommun-sanatorieskogen-10-21637601,Adolfsberg,lagenheter,2195000,1.9680645e+06,-226935.5,-11.5,🔴 Överprissatt,88.0,3.0,47851.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-1rum-centralt-norr-orebro-kommun-hovstavagen-4-19596515,Centralt,lagenheter,895000,1.2326541e+06,337654.125,27.4,🟢 Potentiellt fynd,38.0,1.0,33459.0,2026-03-18
@@ -181,7 +188,6 @@ https://www.hemnet.se/bostad/lagenhet-1rum-ladugardsangen-orebro-kommun-termikga
 https://www.hemnet.se/bostad/lagenhet-2rum-ladugardsangen-orebro-kommun-termikgatan-27a-21650642,Ladugårdsängen,lagenheter,1495000,1.1022111e+06,-392788.875,-35.6,🔴 Överprissatt,51.0,2.0,45154.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-sorbyangen-orebro-kommun-lillbackavagen-5-21667449,Sörbyängen,lagenheter,1495000,1.224454e+06,-270546.0,-22.1,🔴 Överprissatt,49.0,2.0,63759.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-3rum-orebro-kommun-gaddestavagen-26-21682321,Örebro,lagenheter,1980000,1.6745309e+06,-305469.125,-18.2,🔴 Överprissatt,80.0,3.0,37608.0,2026-03-18
-https://www.hemnet.se/bostad/lagenhet-2rum-sodra-ladugardsangen-orebro-kommun-lillbackavagen-7-21679805,Ladugårdsängen,lagenheter,1395000,1.0250103e+06,-369989.6875,-36.1,🔴 Överprissatt,45.0,2.0,63453.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-sodra-lindhult-orebro-kommun-bonstorpsvagen-8-21448124,Södra Lindhult,lagenheter,1295000,1.2186639e+06,-76336.125,-6.3,🔴 Överprissatt,55.0,2.0,44910.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-3rum-centralt-vaster-orebro-kommun-lovstagatan-6b-21569072,Centralt Väster,lagenheter,2195000,2.0297935e+06,-165206.5,-8.1,🔴 Överprissatt,86.0,3.0,36446.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-4rum-centralt-oster-orebro-kommun-arbetargatan-5a-21623060,Centralt Öster,lagenheter,3195000,2.3667922e+06,-828207.75,-35.0,🔴 Överprissatt,83.0,4.0,66707.0,2026-03-18
@@ -235,7 +241,6 @@ https://www.hemnet.se/bostad/lagenhet-3rum-alnangarna-slussen-orebro-kommun-cv-g
 https://www.hemnet.se/bostad/lagenhet-2rum-vaster-orebro-kommun-hertig-karls-alle-75e-21462208,Väster,lagenheter,1050000,1.1530522e+06,103052.25,8.9,🟡 Rimligt pris,56.0,2.0,34206.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-3rum-lillan-orebro-kommun-markorvagen-16-21589141,Lillån,lagenheter,1495000,1.7855604e+06,290560.375,16.3,🟢 Potentiellt fynd,78.0,3.0,46318.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-slussen-orebro-kommun-sodra-grev-rosengatan-56a-21597675,övrigt,lagenheter,1895000,1.2820509e+06,-612949.125,-47.8,🔴 Överprissatt,52.0,2.0,24638.0,2026-03-18
-https://www.hemnet.se/bostad/lagenhet-2rum-oster-orebro-kommun-norensbergsgatan-106-21647691,Öster,lagenheter,1900000,1.9947642e+06,94764.25,4.8,🟡 Rimligt pris,66.0,2.0,23910.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-3rum-rynningeasen-orebro-kommun-forradsgatan-12-21678975,Rynningeåsen,lagenheter,2295000,1.9675629e+06,-327437.125,-16.6,🔴 Överprissatt,79.0,3.0,46119.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-centralt-orebro-kommun-kungsgatan-52-a-avgiftsfritt-ett-ar-21678465,Centralt,lagenheter,1595000,1.7530745e+06,158074.5,9.0,🟡 Rimligt pris,68.0,2.0,37049.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-mellringe-orebro-kommun-irisgatan-98-21285333,Mellringe,lagenheter,1250000,1.0047225e+06,-245277.5,-24.4,🔴 Överprissatt,67.0,2.0,34553.0,2026-03-18
@@ -307,7 +312,6 @@ https://www.hemnet.se/bostad/lagenhet-3rum-centralt-vaster-orebro-kommun-vastra-
 https://www.hemnet.se/bostad/lagenhet-3rum-cv-staden-orebro-kommun-cv-gatan-19863656,övrigt,lagenheter,2775000,2.2084645e+06,-566535.5,-25.7,🔴 Överprissatt,80.0,3.0,5988.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-3rum-sodra-ladugardsangen-orebro-kommun-karlsdalsallen-55-21675520,Ladugårdsängen,lagenheter,1690000,1.237592e+06,-452408.0,-36.6,🔴 Överprissatt,61.0,3.0,54156.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-nasby-orebro-kommun-bjorkmansgatan-8-18258657,Radhus Näsby,lagenheter,1695000,1.212205e+06,-482795.0,-39.8,🔴 Överprissatt,51.0,2.0,54127.0,2026-03-18
-https://www.hemnet.se/bostad/lagenhet-2rum-ormesta-orebro-kommun-alholmsgatan-15-studentvanlig-21325143,Ormesta,lagenheter,995000,956206.8,-38793.1875,-4.1,🟡 Rimligt pris,35.0,2.0,53869.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-centralt-oster-orebro-kommun-oljevagen-4-21459732,Centralt Öster,lagenheter,2350000,1.5373498e+06,-812650.25,-52.9,🔴 Överprissatt,54.0,2.0,24100.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-4rum-solhaga-orebro-kommun-stodjegrand-17-21272858,Solhaga,lagenheter,1395000,1.4375e+06,42500.0,3.0,🟡 Rimligt pris,85.5,4.0,26356.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-1rum-ladugardsangen-orebro-kommun-golfbanevagen-11-21627554,Ladugårdsängen,lagenheter,1195000,807645.06,-387354.9375,-48.0,🔴 Överprissatt,40.0,1.0,33114.0,2026-03-18
@@ -326,7 +330,6 @@ https://www.hemnet.se/bostad/lagenhet-2rum-solhaga-orebro-kommun-stodjegrand-63-
 https://www.hemnet.se/bostad/lagenhet-2rum-sorbyangen-orebro-kommun-abroddgatan-7-21370652,Sörbyängen,lagenheter,1450000,1.239443e+06,-210557.0,-17.0,🔴 Överprissatt,56.0,2.0,44709.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-4rum-solhaga-orebro-kommun-ledgrand-35-21642368,Solhaga,lagenheter,1095000,1.4375e+06,342500.0,23.8,🟢 Potentiellt fynd,85.5,4.0,28004.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-4rum-orebro-orebro-kommun-hjarstavagen-16m-21661701,Örebro,lagenheter,1695000,2.016566e+06,321566.0,15.9,🟢 Potentiellt fynd,111.0,4.0,8087.0,2026-03-18
-https://www.hemnet.se/bostad/lagenhet-2rum-bjorkhaga-orebro-kommun-stampelgatan-13d-21660738,Björkhaga,lagenheter,1300000,1.3260731e+06,26073.125,2.0,🟡 Rimligt pris,72.5,2.0,25373.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-3rum-norra-ormesta-orebro-kommun-alholmsgatan-11-19883200,Ormesta,lagenheter,2095000,1.6047245e+06,-490275.5,-30.6,🔴 Överprissatt,72.0,3.0,45985.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-sorby-eklunda-orebro-kommun-sidvallsgatan-7-21485910,Sörby,lagenheter,1395000,1.2305791e+06,-164420.875,-13.4,🔴 Överprissatt,53.0,2.0,33962.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-1rum-vaster-orebro-kommun-lovstagatan-21c-21472182,Väster,lagenheter,795000,813962.3,18962.3125,2.3,🟡 Rimligt pris,40.0,1.0,33376.0,2026-03-18
@@ -341,7 +344,6 @@ https://www.hemnet.se/bostad/lagenhet-2rum-sodra-lindhult-orebro-kommun-bonstorp
 https://www.hemnet.se/bostad/lagenhet-3rum-centralt-norr-orebro-kommun-venavagen-25c-21367487,Centralt,lagenheter,1695000,2.0585475e+06,363547.5,17.7,🟢 Potentiellt fynd,76.0,3.0,35142.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-orebro-kommun-cv-gatan-109-21400386,Örebro,lagenheter,2350000,1.3642755e+06,-985724.5,-72.3,⚠️ Osäkert,65.0,2.0,44989.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-1rum-ladugardsangen-orebro-kommun-termikgatan-27b-21410215,Ladugårdsängen,lagenheter,1195000,789313.6,-405686.375,-51.4,🔴 Överprissatt,34.8,1.0,53538.0,2026-03-18
-https://www.hemnet.se/bostad/lagenhet-2rum-ladugardsangen-orebro-kommun-termikgatan-23a-21435309,Ladugårdsängen,lagenheter,1595000,1.107933e+06,-487067.0,-44.0,🔴 Överprissatt,56.2,2.0,64715.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-sodra-ladugardsangen-orebro-kommun-termikgatan-45c-19804735,Ladugårdsängen,lagenheter,1495000,1.1022111e+06,-392788.875,-35.6,🔴 Överprissatt,51.0,2.0,54209.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-1rum-oster-orebro-kommun-sveavagen-2a-21513765,Öster,lagenheter,1150000,1.384854e+06,234854.0,17.0,🟢 Potentiellt fynd,30.0,1.0,1876.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-3rum-sorbyangen-orebro-kommun-kamomillgatan-8-21564408,Sörbyängen,lagenheter,1650000,1.3383461e+06,-311653.875,-23.3,🔴 Överprissatt,58.6,3.0,45091.0,2026-03-18
@@ -355,11 +357,9 @@ https://www.hemnet.se/bostad/lagenhet-2rum-centralt-oster-orebro-kommun-nygatan-
 https://www.hemnet.se/bostad/lagenhet-2rum-sorbyangen-orebro-kommun-karlsdalsallen-47a-21559706,Sörbyängen,lagenheter,1750000,1.262839e+06,-487161.0,-38.6,🔴 Överprissatt,57.0,2.0,55771.0,2026-03-18
 "https://www.hemnet.se/bostad/lagenhet-2,5rum-sorby-orebro-kommun-sockengatan-16-21561738",Sörby,lagenheter,1795000,2.303774e+06,508774.0,22.1,🟢 Potentiellt fynd,73.0,2.5,35840.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-adolfsberg-orebro-kommun-sanatorieskogen-12-21568428,Adolfsberg,lagenheter,1695000,1.404991e+06,-290009.0,-20.6,🔴 Överprissatt,65.0,2.0,45934.0,2026-03-18
-https://www.hemnet.se/bostad/lagenhet-2rum-norr-orebro-kommun-schantzgatan-10c-21661734,Norr,lagenheter,895000,984557.3,89557.3125,9.1,🟡 Rimligt pris,41.0,2.0,33311.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-6rum-orebro-orebro-kommun-annebergsvagen-4c-21665766,Örebro,lagenheter,2350000,2.7455565e+06,395556.5,14.4,🟡 Rimligt pris,122.0,6.0,6201.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-oster-orebro-kommun-isgatan-7-21448152,Öster,lagenheter,2195000,1.9099548e+06,-285045.25,-14.9,🔴 Överprissatt,62.0,2.0,93295.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-centralt-norr-orebro-kommun-venavagen-25b-21647372,Centralt,lagenheter,1150000,1.5297061e+06,379706.125,24.8,🟢 Potentiellt fynd,55.5,2.0,34173.0,2026-03-18
-https://www.hemnet.se/bostad/lagenhet-1rum-sodra-lindhult-orebro-kommun-bonstorpsvagen-14-21578004,Södra Lindhult,lagenheter,1095000,916446.3,-178553.6875,-19.5,🔴 Överprissatt,41.0,1.0,43628.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-3rum-ladugardsangen-orebro-kommun-termikgatan-23e-21602975,Ladugårdsängen,lagenheter,1950000,1.412356e+06,-537644.0,-38.1,🔴 Överprissatt,71.5,3.0,65997.0,2026-03-18
 "https://www.hemnet.se/bostad/lagenhet-1,5rum-rynninge-orebro-kommun-pionjargatan-24-21650682",Rynninge,lagenheter,1495000,934481.06,-560518.9375,-60.0,🔴 Överprissatt,42.0,1.5,43116.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-rynningeasen-orebro-kommun-pionjargatan-20-studentvanlig-21669963,Rynningeåsen,lagenheter,1695000,1.7159571e+06,20957.125,1.2,🟡 Rimligt pris,68.0,2.0,44852.0,2026-03-18
@@ -394,7 +394,7 @@ https://www.hemnet.se/bostad/lagenhet-3rum-sorbyangen-orebro-kommun-mejramvagen-
 https://www.hemnet.se/bostad/lagenhet-2rum-sodra-ladugardsangen-orebro-kommun-lillbackavagen-11-21456432,Ladugårdsängen,lagenheter,1695000,1.1022111e+06,-592788.875,-53.8,🔴 Överprissatt,51.0,2.0,54185.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-3rum-ormesta-orebro-kommun-olofsgatan-9-21662696,Ormesta,lagenheter,1895000,1.6321e+06,-262900.0,-16.1,🔴 Överprissatt,74.0,3.0,45136.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-sorbyangen-orebro-kommun-termikgatan-21b-21661858,Sörbyängen,lagenheter,1495000,1.1480162e+06,-346983.75,-30.2,🔴 Överprissatt,44.4,2.0,44514.0,2026-03-18
-https://www.hemnet.se/bostad/lagenhet-1rum-centralt-norr-orebro-kommun-schantzgatan-3-21680348,Centralt,lagenheter,1195000,1.2274891e+06,32489.125,2.6,🟡 Rimligt pris,40.1,1.0,33184.0,2026-03-18
+https://www.hemnet.se/bostad/lagenhet-1rum-centralt-norr-orebro-kommun-schantzgatan-3-21680348,Centralt,lagenheter,995000,1.2274891e+06,232489.125,18.9,🟢 Potentiellt fynd,40.1,1.0,33184.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-mellringe-orebro-kommun-irisgatan-34-21489714,Mellringe,lagenheter,895000,1.0047225e+06,109722.5,10.9,🟡 Rimligt pris,67.0,2.0,34553.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-almby-orebro-kommun-kyrkvardsvagen-10-21512076,Almby,lagenheter,1350000,1.2037108e+06,-146289.25,-12.2,🔴 Överprissatt,56.5,2.0,34450.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-sorby-eklunda-orebro-kommun-restalundsvagen-16f-19680258,Sörby,lagenheter,2095000,1.5402938e+06,-554706.25,-36.0,🔴 Överprissatt,67.0,2.0,14019.0,2026-03-18
@@ -403,7 +403,6 @@ https://www.hemnet.se/bostad/lagenhet-1rum-ormesta-orebro-kommun-olofsgatan-13-2
 https://www.hemnet.se/bostad/lagenhet-2rum-nasby-orebro-kommun-bjorkmansgatan-16-21620591,Radhus Näsby,lagenheter,1850000,1.212205e+06,-637795.0,-52.6,🔴 Överprissatt,51.0,2.0,43840.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-4rum-hovsta-orebro-kommun-kumlagardsvagen-21659996,Hovsta,lagenheter,2495000,2.1120592e+06,-382940.75,-18.1,🔴 Överprissatt,101.2,4.0,4300.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-3rum-mellringe-orebro-kommun-irisgatan-84-21641973,Mellringe,lagenheter,1195000,1.2860818e+06,91081.75,7.1,🟡 Rimligt pris,84.0,3.0,35493.0,2026-03-18
-https://www.hemnet.se/bostad/lagenhet-2rum-centralt-vaster-orebro-kommun-hertig-karls-alle-56-b-21659318,Centralt Väster,lagenheter,775000,1.03855856e+06,263558.5625,25.4,🟢 Potentiellt fynd,42.0,2.0,35069.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-4rum-oster-orebro-kommun-lykttandargatan-5-19568715,Öster,lagenheter,3245000,3.0731452e+06,-171854.75,-5.6,🔴 Överprissatt,91.0,4.0,86251.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-oster-orebro-kommun-arbetargatan-5b-19600693,Öster,lagenheter,1895000,1.7349226e+06,-160077.375,-9.2,🔴 Överprissatt,52.0,2.0,64396.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-3rum-sorbyangen-orebro-kommun-termikgatan-49a-21270720,Sörbyängen,lagenheter,1895000,1.6143385e+06,-280661.5,-17.4,🔴 Överprissatt,69.0,3.0,55395.0,2026-03-18
@@ -490,10 +489,12 @@ https://www.hemnet.se/bostad/lagenhet-2rum-bettorp-orebro-kommun-kornellvagen-37
 https://www.hemnet.se/bostad/lagenhet-2rum-sorby-eklunda-orebro-kommun-hagmarksgatan-13a-21373518,Sörby,lagenheter,1395000,1.2201294e+06,-174870.625,-14.3,🔴 Överprissatt,54.0,2.0,34609.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-6rum-orebro-kommun-sveavagen-2a-21339822,Örebro,lagenheter,3495000,3.81946e+06,324460.0,8.5,🟡 Rimligt pris,155.0,6.0,69695.0,2026-03-18
 https://www.hemnet.se/bostad/lagenhet-2rum-ormesta-orebro-kommun-olofsgatan-15-19876037,Ormesta,lagenheter,1495000,1.2134512e+06,-281548.75,-23.2,🔴 Överprissatt,54.0,2.0,44383.0,2026-03-18
-https://www.hemnet.se/bostad/villa-4rum-odensbacken-orebro-kommun-hummelsta-137-21381621,Odensbacken,villor,1575000,1.4741281e+06,-100871.875,-6.8,🔴 Överprissatt,80.0,4.0,0.0,2026-03-18
+https://www.hemnet.se/bostad/villa-3rum-orebro-kommun-egersta-363-21687311,Örebro,villor,2595000,1.2228755e+06,-1372124.5,-112.2,⚠️ Osäkert,30.0,3.0,0.0,2026-03-18
+https://www.hemnet.se/bostad/villa-5rum-hovsta-orebro-kommun-havrevagen-17-21689321,Hovsta,villor,3295000,3.2007898e+06,-94210.25,-2.9,🟡 Rimligt pris,125.0,5.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-5rum-runnaby-orebro-kommun-rullstensbacken-13-21674838,övrigt,villor,5695000,1.340406e+06,-4354594.0,-324.9,⚠️ Osäkert,25.0,5.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-6rum-lillan-orebro-kommun-backvagen-4-21634824,Lillån,villor,3995000,3.696528e+06,-298472.0,-8.1,🔴 Överprissatt,85.0,6.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-4rum-adolfsberg-orebro-kommun-porla-grand-29-21542224,Adolfsberg,villor,3595000,1.4795965e+06,-2115403.5,-143.0,⚠️ Osäkert,13.0,4.0,0.0,2026-03-18
+https://www.hemnet.se/bostad/villa-4rum-odensbacken-orebro-kommun-hummelsta-137-21381621,Odensbacken,villor,1575000,1.4741281e+06,-100871.875,-6.8,🔴 Överprissatt,80.0,4.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-7rum-haga-orebro-kommun-vesslevagen-8-21644773,Solhaga,villor,6500000,4.1540602e+06,-2345939.75,-56.5,🔴 Överprissatt,112.0,7.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-5rum-orebro-kommun-lindovagen-34-21627682,Örebro,villor,3795000,4.233575e+06,438575.0,10.4,🟡 Rimligt pris,135.0,5.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-9rum-almby-orebro-kommun-odalgatan-10-21576942,Almby,villor,9895000,3.6934852e+06,-6201514.75,-167.9,⚠️ Osäkert,52.0,9.0,0.0,2026-03-18
@@ -509,7 +510,6 @@ https://www.hemnet.se/bostad/villa-6rum-latorp-orebro-kommun-garphyttevagen-4-21
 https://www.hemnet.se/bostad/villa-5rum-hovsta-orebro-kommun-vetevagen-68-21535553,Hovsta,villor,3495000,3.2007898e+06,-294210.25,-9.2,🔴 Överprissatt,125.0,5.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-3rum-hjarsta-orebro-kommun-fagelbarsgatan-27-21686808,Nya Hjärsta,villor,2695000,2.6319825e+06,-63017.5,-2.4,🟡 Rimligt pris,83.0,3.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-4rum-vintrosa-orebro-kommun-eskilstorp-325-21687174,Vintrosa,villor,2750000,1.108506e+06,-1641494.0,-148.1,⚠️ Osäkert,33.0,4.0,0.0,2026-03-18
-https://www.hemnet.se/bostad/villa-3rum-orebro-kommun-egersta-363-21687311,Örebro,villor,2595000,1.2228755e+06,-1372124.5,-112.2,⚠️ Osäkert,30.0,3.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-3rum-odensbacken-orebro-kommun-notboda-313-21687442,Odensbacken,villor,1895000,1.0814036e+06,-813596.375,-75.2,⚠️ Osäkert,57.0,3.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-5rum-asker-orebro-kommun-askersvagen-13-21651331,Asker,villor,1150000,2.644536e+06,1494536.0,56.5,🟢 Potentiellt fynd,70.0,5.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-5rum-marieberg-orebro-kommun-torells-vag-7-21672762,Marieberg,villor,3495000,3.4310442e+06,-63955.75,-1.9,🟡 Rimligt pris,79.0,5.0,0.0,2026-03-18
@@ -627,9 +627,10 @@ https://www.hemnet.se/bostad/villa-5rum-lappe-vingakers-kommun-lappe-bjorkhaga-2
 https://www.hemnet.se/bostad/villa-4rum-lanna-lekebergs-kommun-trilobitvagen-2-21578291,övrigt,villor,3250000,3.357567e+06,107567.0,3.2,🟡 Rimligt pris,97.0,4.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-5rum-lanna-lekebergs-kommun-albatrossgatan-20-21670915,övrigt,villor,5795000,5.154077e+06,-640923.0,-12.4,🔴 Överprissatt,180.0,5.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-6rum-lanna-lekebergs-kommun-inspelsgatan-14-21622358,övrigt,villor,5795000,5.2363525e+06,-558647.5,-10.7,🔴 Överprissatt,181.0,6.0,0.0,2026-03-18
-https://www.hemnet.se/bostad/villa-4rum-nora-pershyttan-nora-kommun-nya-pershyttan-slantan-119-21546389,övrigt,villor,1850000,4.192396e+06,2342396.0,55.9,🟢 Potentiellt fynd,130.0,4.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/villa-8rum-ekeby-kumla-kommun-frommesta-216-21457236,Almby,villor,5395000,5.54412e+06,149120.0,2.7,🟡 Rimligt pris,116.0,8.0,0.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-4rum-lundby-orebro-kommun-stralstensvagen-23-21686819,Lundby,radhus,2595000,1.6787254e+06,-916274.625,-54.6,🔴 Överprissatt,110.0,4.0,7150.0,2026-03-18
+https://www.hemnet.se/bostad/radhus-5rum-lundby-orebro-kommun-glimmervagen-15-21687403,Lundby,radhus,2450000,1.8849024e+06,-565097.625,-30.0,🔴 Överprissatt,113.0,5.0,7150.0,2026-03-18
+https://www.hemnet.se/bostad/radhus-5rum-runnaby-orebro-kommun-kristinelundsvagen-21c-21677542,övrigt,radhus,2795000,2.9366095e+06,141609.5,4.8,🟡 Rimligt pris,125.0,5.0,6638.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-4rum-garphyttan-orebro-kommun-tysslingevagen-18-21684135,Garphyttan,radhus,1195000,1.4841849e+06,289184.875,19.5,🟢 Potentiellt fynd,100.0,4.0,6402.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-6rum-almby-orebro-kommun-ingenjorsgatan-13-21577932,Almby,radhus,3395000,2.2078512e+06,-1187148.75,-53.8,🔴 Överprissatt,104.8,6.0,8216.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-4rum-nya-hjarsta-orebro-kommun-byalagsgatan-4-h-21689054,Nya Hjärsta,radhus,2095000,1.820361e+06,-274639.0,-15.1,🔴 Överprissatt,95.7,4.0,6741.0,2026-03-18
@@ -690,7 +691,6 @@ https://www.hemnet.se/bostad/radhus-6rum-ormesta-orebro-kommun-ulsavilagatan-16e
 https://www.hemnet.se/bostad/radhus-5rum-norra-ormesta-orebro-kommun-ulsavilagatan-5a-21599251,Ormesta,radhus,3195000,2.7750825e+06,-419917.5,-15.1,🔴 Överprissatt,112.8,5.0,6797.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-5rum-ormesta-orebro-kommun-ulsavilagatan-3c-21541814,Ormesta,radhus,2995000,2.7750825e+06,-219917.5,-7.9,🔴 Överprissatt,112.8,5.0,6797.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-4rum-lillan-orebro-kommun-nastegardsvagen-5a-21568909,Lillån,radhus,2350000,2.493535e+06,143535.0,5.8,🟡 Rimligt pris,111.0,4.0,6240.0,2026-03-18
-https://www.hemnet.se/bostad/radhus-5rum-ekeby-almby-orebro-kommun-lakevagen-11b-21632365,Almby,radhus,2850000,2.6670312e+06,-182968.75,-6.9,🔴 Överprissatt,118.0,5.0,6995.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-4rum-lillan-orebro-kommun-nastegardsvagen-50c-20622797,Lillån,radhus,2195000,2.293023e+06,98023.0,4.3,🟡 Rimligt pris,99.0,4.0,6617.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-4rum-centralt-orebro-kommun-manillagatan-27a-21609510,Centralt,radhus,3995000,3.5340035e+06,-460996.5,-13.0,🔴 Överprissatt,117.5,4.0,9112.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-3rum-adolfsberg-sodra-lindhult-orebro-kommun-norra-belltorpsvagen-4b-21286787,Adolfsberg,radhus,2195000,2.002816e+06,-192184.0,-9.6,🔴 Överprissatt,80.0,3.0,5806.0,2026-03-18
@@ -708,11 +708,11 @@ https://www.hemnet.se/bostad/radhus-6rum-norra-bro-orebro-kommun-annebergsvagen-
 https://www.hemnet.se/bostad/radhus-4rum-runnaby-orebro-kommun-kristinelundsvagen-19b-19399882,övrigt,radhus,2795000,2.9900258e+06,195025.75,6.5,🟡 Rimligt pris,125.0,4.0,6638.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-4rum-orebro-orebro-kommun-nastegardsvagen-11d-21639385,Örebro,radhus,2195000,2.3599718e+06,164971.75,7.0,🟡 Rimligt pris,111.0,4.0,6240.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-6rum-ekeby-almby-orebro-kommun-tallsoppsvagen-3-20608175,Almby,radhus,3595000,3.2684622e+06,-326537.75,-10.0,🔴 Överprissatt,144.0,6.0,6990.0,2026-03-18
+https://www.hemnet.se/bostad/radhus-5rum-lanna-lekebergs-kommun-hasselbacksvagen-3f-21625404,övrigt,radhus,2095000,2.5464608e+06,451460.75,17.7,🟢 Potentiellt fynd,112.0,5.0,7150.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-6rum-lanna-lekebergs-kommun-vattenhindersgatan-7a-21394152,övrigt,radhus,2450000,3.198863e+06,748863.0,23.4,🟢 Potentiellt fynd,144.0,6.0,7495.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-5rum-lanna-lekebergs-kommun-inspelsgatan-2d-21682238,övrigt,radhus,1995000,2.8652322e+06,870232.25,30.4,🟢 Potentiellt fynd,112.0,5.0,6150.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-6rum-lanna-vintrosa-lekebergs-kommun-vattenhindersgatan-12a-21603340,Vintrosa,radhus,2625000,2.143843e+06,-481157.0,-22.4,🔴 Överprissatt,144.0,6.0,6940.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-6rum-lanna-lekebergs-kommun-sandbunkergatan-9a-21298620,övrigt,radhus,1995000,3.1339365e+06,1138936.5,36.3,🟢 Potentiellt fynd,144.0,6.0,8395.0,2026-03-18
-https://www.hemnet.se/bostad/radhus-5rum-lanna-lekebergs-kommun-hasselbacksvagen-3f-21625404,övrigt,radhus,2095000,2.5464608e+06,451460.75,17.7,🟢 Potentiellt fynd,112.0,5.0,7150.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-5rum-lanna-lekebergs-kommun-hasselbacksvagen-1b-21602240,övrigt,radhus,1995000,2.4314648e+06,436464.75,18.0,🟢 Potentiellt fynd,112.0,5.0,7584.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-4rum-lanna-vintrosa-lekebergs-kommun-inspelsgatan-4c-21651017,Vintrosa,radhus,1895000,2.1237755e+06,228775.5,10.8,🟡 Rimligt pris,112.0,4.0,6500.0,2026-03-18
 https://www.hemnet.se/bostad/radhus-5rum-lanna-lekebergs-kommun-hasselbacksvagen-3e-21289896,övrigt,radhus,2195000,2.369624e+06,174624.0,7.4,🟡 Rimligt pris,112.0,5.0,27150.0,2026-03-18
