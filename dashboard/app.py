@@ -705,10 +705,11 @@ elif page == "🗺️ Karta":
             map_df['pris_per_kvm'] = map_df['pris_per_kvm'].fillna(map_df['pris_per_kvm'].median())
             map_df['latitude'] = map_df['latitude'] + np.random.uniform(-0.002, 0.002, len(map_df))
             map_df['longitude'] = map_df['longitude'] + np.random.uniform(-0.002, 0.002, len(map_df))
+            map_df['dot_size'] = map_df['boarea_kvm'].clip(lower=60)
 
             fig = px.scatter_mapbox(
                 map_df, lat="latitude", lon="longitude",
-                color="pris_per_kvm", size="boarea_kvm",
+                color="pris_per_kvm", size="dot_size",
                 color_continuous_scale=["#1a1f2e", "#667eea", "#00D4AA", "#feca57", "#ff6b6b"],
                 size_max=15, zoom=10,
                 hover_name="omrade_clean" if 'omrade_clean' in map_df.columns else None,
