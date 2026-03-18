@@ -24,7 +24,10 @@ jobs:
           sudo apt-get install -y google-chrome-stable
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install selenium webdriver-manager
+          python -c "import selenium; print('selenium OK:', selenium.__version__)"
 
       - name: Run daily update
         run: python scripts/daily_update.py 2>&1
