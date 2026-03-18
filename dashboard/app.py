@@ -142,7 +142,8 @@ def load_coords():
 
 
 FALLBACK_LAT, FALLBACK_LON = 59.2753, 15.2134
-TYP_LABELS = {'lagenheter': 'Lägenheter', 'villor': 'Villor', 'radhus': 'Radhus'}
+TYP_LABELS = {'lagenheter': 'Lägenheter',
+              'villor': 'Villor', 'radhus': 'Radhus'}
 COLOR_MAP = {'Lägenheter': '#00D4AA', 'Villor': '#667eea', 'Radhus': '#ff6b6b'}
 
 
@@ -160,7 +161,8 @@ def get_map_df(_df, _df_coords):
     def lookup(area_name):
         if pd.isna(area_name):
             return None, None
-        match = good_coords[good_coords['omrade'].str.lower() == str(area_name).lower()]
+        match = good_coords[good_coords['omrade'].str.lower()
+                            == str(area_name).lower()]
         if len(match) > 0:
             return match.iloc[0]['lat'], match.iloc[0]['lon']
         prefixes = ['Radhus ', 'Lägenhet ', 'Villa ', 'Fritidshus ', 'Gård/Skog ',
@@ -259,7 +261,8 @@ if page == "📊 Översikt":
         fig = px.histogram(
             df_plot, x="slutpris", color="bostadstyp", nbins=50,
             title="Prisfördelning per bostadstyp",
-            labels={"slutpris": "Slutpris (kr)", "count": "Antal", "bostadstyp": "Typ"},
+            labels={
+                "slutpris": "Slutpris (kr)", "count": "Antal", "bostadstyp": "Typ"},
             barmode="overlay", opacity=0.7,
             color_discrete_map=COLOR_MAP,
         )
@@ -284,7 +287,8 @@ if page == "📊 Översikt":
             fig = px.line(
                 yearly, x="sald_ar", y="slutpris", color="bostadstyp",
                 title="Prisutveckling per år",
-                labels={"sald_ar": "År", "slutpris": "Medianpris (kr)", "bostadstyp": "Typ"},
+                labels={"sald_ar": "År",
+                        "slutpris": "Medianpris (kr)", "bostadstyp": "Typ"},
                 color_discrete_map=COLOR_MAP,
                 markers=True,
             )
@@ -342,12 +346,14 @@ if page == "📊 Översikt":
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
     st.markdown("### 📋 Senaste försäljningar")
     if 'sald_datum' in df.columns and 'omrade_clean' in df.columns:
-        dagar = st.slider("Visa senaste X dagar", 7, 90, 30, key="senaste_dagar")
+        dagar = st.slider("Visa senaste X dagar", 7,
+                          90, 30, key="senaste_dagar")
         cutoff = pd.Timestamp.now() - pd.Timedelta(days=dagar)
         senaste = df[df['sald_datum'] >= cutoff].copy()
         senaste['bostadstyp_label'] = senaste['bostadstyp'].map(TYP_LABELS)
         if len(senaste) > 0:
-            st.caption(f"{len(senaste)} försäljningar de senaste {dagar} dagarna")
+            st.caption(
+                f"{len(senaste)} försäljningar de senaste {dagar} dagarna")
             visa_cols = ['sald_datum', 'omrade_clean', 'bostadstyp_label',
                          'slutpris', 'pris_per_kvm', 'boarea_kvm', 'antal_rum', 'prisforandring_pct']
             visa_cols = [c for c in visa_cols if c in senaste.columns]
@@ -366,7 +372,8 @@ if page == "📊 Översikt":
                 }
             )
         else:
-            st.info(f"Inga försäljningar registrerade de senaste {dagar} dagarna.")
+            st.info(
+                f"Inga försäljningar registrerade de senaste {dagar} dagarna.")
 
 
 # ============================================================
@@ -386,7 +393,7 @@ elif page == "💰 Prisprediktering":
         antal_rum = st.selectbox(
             "Antal rum", [1, 1.5, 2, 3, 4, 5, 6, 7, 8], index=3)
         bostad_alder = st.slider("Byggnadsår", 1950, 2026, 1990,
-                                  help="Årets datum - byggnadsår = bostadens ålder")
+                                 help="Årets datum - byggnadsår = bostadens ålder")
 
     with col2:
         avgift = st.slider("Månadsavgift (kr)", 0, 12000, 4000, step=100,
@@ -394,7 +401,7 @@ elif page == "💰 Prisprediktering":
         bostadstyp = st.selectbox(
             "Bostadstyp", ["Lägenhet", "Villa", "Radhus"])
         vaning = st.number_input("Våning", min_value=0, max_value=20, value=2,
-                                  help="0 för villa/radhus")
+                                 help="0 för villa/radhus")
 
     with col3:
         if model_data is not None:
@@ -405,7 +412,8 @@ elif page == "💰 Prisprediktering":
             ])
             omrade = st.selectbox("Område", ['övrigt'] + area_groups)
         elif 'omrade_clean' in df.columns:
-            top_areas = df['omrade_clean'].value_counts().head(70).index.tolist()
+            top_areas = df['omrade_clean'].value_counts().head(
+                70).index.tolist()
             omrade = st.selectbox("Område", ['övrigt'] + sorted(top_areas))
         else:
             omrade = st.selectbox("Område", ["Örebro"])
@@ -413,9 +421,11 @@ elif page == "💰 Prisprediktering":
 
     col4, col5, col6 = st.columns(3)
     with col4:
-        har_balkong = st.checkbox("🏗️ Balkong/uteplats", value=bostadstyp == "Lägenhet")
+        har_balkong = st.checkbox(
+            "🏗️ Balkong/uteplats", value=bostadstyp == "Lägenhet")
     with col5:
-        har_garage = st.checkbox("🚗 Garage/carport", value=bostadstyp == "Villa")
+        har_garage = st.checkbox(
+            "🚗 Garage/carport", value=bostadstyp == "Villa")
     with col6:
         renoverad = st.checkbox("🔨 Renoverad")
 
@@ -486,7 +496,8 @@ elif page == "💰 Prisprediktering":
 
                 fig = px.histogram(similar, x="slutpris", nbins=30,
                                    title=f"Prisfördelning — {bostadstyp.lower()} ({boarea}±15 m²)",
-                                   labels={"slutpris": "Slutpris (kr)", "count": "Antal"},
+                                   labels={
+                                       "slutpris": "Slutpris (kr)", "count": "Antal"},
                                    color_discrete_sequence=['#00D4AA'])
                 fig.add_vline(x=estimate, line_dash="dash", line_color="#ff6b6b",
                               annotation_text=f"Ditt estimat: {estimate:,} kr")
@@ -502,17 +513,23 @@ elif page == "💰 Prisprediktering":
                     st.markdown("---")
                     st.markdown(f"#### 📍 Områdesinfo — {omrade}")
                     c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Medianpris", f"{omr_data['slutpris'].median()/1e6:.2f}M kr")
-                    c2.metric("Median kr/m²", f"{omr_data['pris_per_kvm'].median():,.0f}")
+                    c1.metric("Medianpris",
+                              f"{omr_data['slutpris'].median()/1e6:.2f}M kr")
+                    c2.metric("Median kr/m²",
+                              f"{omr_data['pris_per_kvm'].median():,.0f}")
                     if 'prisforandring_pct' in omr_data.columns:
-                        budkrig_pct = (omr_data['prisforandring_pct'] > 0).mean() * 100
+                        budkrig_pct = (
+                            omr_data['prisforandring_pct'] > 0).mean() * 100
                         c3.metric("Budkrigsfrekvens", f"{budkrig_pct:.0f}%")
                     if 'sald_ar' in omr_data.columns:
-                        recent_median = omr_data[omr_data['sald_ar'] >= 2023]['slutpris'].median()
-                        old_median = omr_data[omr_data['sald_ar'] <= 2020]['slutpris'].median()
+                        recent_median = omr_data[omr_data['sald_ar']
+                                                 >= 2023]['slutpris'].median()
+                        old_median = omr_data[omr_data['sald_ar']
+                                              <= 2020]['slutpris'].median()
                         if old_median > 0:
                             trend = (recent_median / old_median - 1) * 100
-                            c4.metric("Pristrend (2020→2023+)", f"{trend:+.0f}%")
+                            c4.metric("Pristrend (2020→2023+)",
+                                      f"{trend:+.0f}%")
                     if 'avstand_centrum_km' in omr_data.columns:
                         st.caption(
                             f"Avstånd centrum: ~{omr_data['avstand_centrum_km'].median():.1f} km  |  "
@@ -574,7 +591,8 @@ elif page == "🔍 Live Fynd":
         # Datum + automatisk uppdatering-info
         if 'scrape_datum' in df_active.columns:
             senast = df_active['scrape_datum'].iloc[0]
-            st.success(f"✅ Senast uppdaterad: **{senast}** — uppdateras automatiskt varje dag kl 08:00")
+            st.success(
+                f"✅ Senast uppdaterad: **{senast}** — uppdateras automatiskt varje dag kl 08:00")
 
         # KPI:er
         col1, col2, col3, col4 = st.columns(4)
@@ -639,7 +657,8 @@ elif page == "🔍 Live Fynd":
             "Avvikelse %": st.column_config.NumberColumn(format="%.1f%%"),
         }
         if has_url:
-            col_config["Hemnet"] = st.column_config.LinkColumn(label="Hemnet 🔗", display_text="Öppna")
+            col_config["Hemnet"] = st.column_config.LinkColumn(
+                label="Hemnet 🔗", display_text="Öppna")
 
         st.dataframe(
             df_display,
@@ -698,22 +717,29 @@ elif page == "🗺️ Karta":
                 ]
             map_df = map_df[map_df['slutpris'] <= pris_filter]
 
-            st.caption(f"Visar {len(map_df):,} av {len(map_df_cached):,} bostäder")
+            st.caption(
+                f"Visar {len(map_df):,} av {len(map_df_cached):,} bostäder")
 
             map_df = map_df.copy()
-            map_df['boarea_kvm'] = map_df['boarea_kvm'].fillna(map_df['boarea_kvm'].median())
-            map_df['pris_per_kvm'] = map_df['pris_per_kvm'].fillna(map_df['pris_per_kvm'].median())
-            map_df['latitude'] = map_df['latitude'] + np.random.uniform(-0.002, 0.002, len(map_df))
-            map_df['longitude'] = map_df['longitude'] + np.random.uniform(-0.002, 0.002, len(map_df))
+            map_df['boarea_kvm'] = map_df['boarea_kvm'].fillna(
+                map_df['boarea_kvm'].median())
+            map_df['pris_per_kvm'] = map_df['pris_per_kvm'].fillna(
+                map_df['pris_per_kvm'].median())
+            map_df['latitude'] = map_df['latitude'] + \
+                np.random.uniform(-0.002, 0.002, len(map_df))
+            map_df['longitude'] = map_df['longitude'] + \
+                np.random.uniform(-0.002, 0.002, len(map_df))
             map_df['dot_size'] = map_df['boarea_kvm'].clip(lower=60)
 
             fig = px.scatter_mapbox(
                 map_df, lat="latitude", lon="longitude",
                 color="pris_per_kvm", size="dot_size",
-                color_continuous_scale=["#1a1f2e", "#667eea", "#00D4AA", "#feca57", "#ff6b6b"],
+                color_continuous_scale=[
+                    "#1a1f2e", "#667eea", "#00D4AA", "#feca57", "#ff6b6b"],
                 size_max=15, zoom=10,
                 hover_name="omrade_clean" if 'omrade_clean' in map_df.columns else None,
-                hover_data={'slutpris': ':,.0f', 'boarea_kvm': ':.0f', 'bostadstyp': True},
+                hover_data={'slutpris': ':,.0f',
+                            'boarea_kvm': ':.0f', 'bostadstyp': True},
                 title="Sålda bostäder — pris per m²",
                 mapbox_style="carto-darkmatter",
             )
@@ -748,7 +774,8 @@ elif page == "🗺️ Karta":
                 active_map['color'] = active_map['bedomning'].map(
                     color_map).fillna('#888888')
 
-                active_map['dot_size'] = active_map['boarea_kvm'].fillna(70).clip(lower=60)
+                active_map['dot_size'] = active_map['boarea_kvm'].fillna(
+                    70).clip(lower=60)
 
                 fig = px.scatter_mapbox(
                     active_map, lat="latitude", lon="longitude",
@@ -798,7 +825,8 @@ elif page == "📈 Marknadsanalys":
 
             fig = px.line(monthly, x='sald_datum', y='slutpris', color='bostadstyp',
                           title='Prisutveckling — medianpris per månad (alla områden)',
-                          labels={'sald_datum': '', 'slutpris': 'Medianpris (kr)', 'bostadstyp': 'Typ'},
+                          labels={
+                              'sald_datum': '', 'slutpris': 'Medianpris (kr)', 'bostadstyp': 'Typ'},
                           color_discrete_map=COLOR_MAP)
             fig.update_layout(
                 template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
@@ -807,14 +835,17 @@ elif page == "📈 Marknadsanalys":
             # Prishistorik per specifikt område
             if 'omrade_clean' in df.columns:
                 st.markdown("#### Prishistorik per område")
-                omr_lista = df['omrade_clean'].value_counts()[lambda x: x >= 15].index.tolist()
-                valt_omrade = st.selectbox("Välj område", sorted(omr_lista), key="trend_omrade")
+                omr_lista = df['omrade_clean'].value_counts(
+                )[lambda x: x >= 15].index.tolist()
+                valt_omrade = st.selectbox(
+                    "Välj område", sorted(omr_lista), key="trend_omrade")
                 omr_monthly = df[df['omrade_clean'] == valt_omrade].groupby(
                     pd.Grouper(key='sald_datum', freq='QE')
                 )['slutpris'].median().reset_index()
                 fig2 = px.line(omr_monthly, x='sald_datum', y='slutpris',
                                title=f'Prisutveckling — {valt_omrade}',
-                               labels={'sald_datum': '', 'slutpris': 'Medianpris (kr)'},
+                               labels={'sald_datum': '',
+                                       'slutpris': 'Medianpris (kr)'},
                                color_discrete_sequence=['#00D4AA'], markers=True)
                 fig2.update_layout(
                     template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
@@ -900,10 +931,14 @@ elif page == "📈 Marknadsanalys":
                 budkrig=('prisforandring_pct', lambda x: (x > 0).mean() * 100),
             ).reset_index()
             # Pristrend: median 2023+ vs 2019-
-            trend_ny = df[df['sald_ar'] >= 2023].groupby('omrade_clean')['slutpris'].median()
-            trend_gammal = df[df['sald_ar'] <= 2019].groupby('omrade_clean')['slutpris'].median()
-            omr_stats['pristrend'] = ((trend_ny / trend_gammal - 1) * 100).reindex(omr_stats['omrade_clean'].values).values
-            omr_stats = omr_stats[omr_stats['antal'] >= 20].dropna(subset=['pristrend'])
+            trend_ny = df[df['sald_ar'] >= 2023].groupby('omrade_clean')[
+                'slutpris'].median()
+            trend_gammal = df[df['sald_ar'] <= 2019].groupby('omrade_clean')[
+                'slutpris'].median()
+            omr_stats['pristrend'] = (
+                (trend_ny / trend_gammal - 1) * 100).reindex(omr_stats['omrade_clean'].values).values
+            omr_stats = omr_stats[omr_stats['antal']
+                                  >= 20].dropna(subset=['pristrend'])
 
             # Poängsätt 0-10 per dimension
             def poang(serie, hog_ar_bra=True):
@@ -913,19 +948,26 @@ elif page == "📈 Marknadsanalys":
                 norm = (serie - mn) / (mx - mn) * 10
                 return norm if hog_ar_bra else 10 - norm
 
-            omr_stats['p_pris'] = poang(omr_stats['medianpris'], hog_ar_bra=False).values
-            omr_stats['p_trend'] = poang(omr_stats['pristrend'], hog_ar_bra=True).values
-            omr_stats['p_budkrig'] = poang(omr_stats['budkrig'], hog_ar_bra=True).values
-            omr_stats['p_aktivitet'] = poang(omr_stats['antal'], hog_ar_bra=True).values
+            omr_stats['p_pris'] = poang(
+                omr_stats['medianpris'], hog_ar_bra=False).values
+            omr_stats['p_trend'] = poang(
+                omr_stats['pristrend'], hog_ar_bra=True).values
+            omr_stats['p_budkrig'] = poang(
+                omr_stats['budkrig'], hog_ar_bra=True).values
+            omr_stats['p_aktivitet'] = poang(
+                omr_stats['antal'], hog_ar_bra=True).values
             omr_stats['totalscore'] = (
-                omr_stats[['p_pris','p_trend','p_budkrig','p_aktivitet']].mean(axis=1)
+                omr_stats[['p_pris', 'p_trend', 'p_budkrig',
+                           'p_aktivitet']].mean(axis=1)
             ).round(1)
 
             col1, col2 = st.columns([1, 2])
             with col1:
-                top_n = st.slider("Visa topp N områden", 5, 40, 20, key="score_n")
+                top_n = st.slider("Visa topp N områden",
+                                  5, 40, 20, key="score_n")
                 visa_omr = omr_stats.nlargest(top_n, 'totalscore')[
-                    ['omrade_clean', 'totalscore', 'medianpris', 'pristrend', 'budkrig']
+                    ['omrade_clean', 'totalscore',
+                        'medianpris', 'pristrend', 'budkrig']
                 ].rename(columns={
                     'omrade_clean': 'Område', 'totalscore': 'Score',
                     'medianpris': 'Medianpris', 'pristrend': 'Trend %', 'budkrig': 'Budkrig %'
@@ -941,11 +983,15 @@ elif page == "📈 Marknadsanalys":
                 # Radarchart för valt område
                 valt_score_omr = st.selectbox(
                     "Radardiagram för område",
-                    omr_stats.nlargest(top_n, 'totalscore')['omrade_clean'].tolist(),
+                    omr_stats.nlargest(top_n, 'totalscore')[
+                        'omrade_clean'].tolist(),
                     key="score_omr")
-                row = omr_stats[omr_stats['omrade_clean'] == valt_score_omr].iloc[0]
-                kategorier = ['Prisvärdhet', 'Pristrend', 'Budkrigsfrekvens', 'Marknadsaktivitet']
-                varden = [row['p_pris'], row['p_trend'], row['p_budkrig'], row['p_aktivitet']]
+                row = omr_stats[omr_stats['omrade_clean']
+                                == valt_score_omr].iloc[0]
+                kategorier = ['Prisvärdhet', 'Pristrend',
+                              'Budkrigsfrekvens', 'Marknadsaktivitet']
+                varden = [row['p_pris'], row['p_trend'],
+                          row['p_budkrig'], row['p_aktivitet']]
                 fig = go.Figure(go.Scatterpolar(
                     r=varden + [varden[0]],
                     theta=kategorier + [kategorier[0]],
@@ -955,7 +1001,7 @@ elif page == "📈 Marknadsanalys":
                 ))
                 fig.update_layout(
                     polar=dict(radialaxis=dict(visible=True, range=[0, 10],
-                                              gridcolor='#333', linecolor='#333'),
+                                               gridcolor='#333', linecolor='#333'),
                                angularaxis=dict(gridcolor='#333', linecolor='#555')),
                     template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
                     title=f"Scorecard — {valt_score_omr}",
@@ -1086,7 +1132,8 @@ elif page == "🔮 Scenarioanalys":
 
 elif page == "🏦 Köpkalkyl":
     st.markdown("# 🏦 Köpkalkyl")
-    st.markdown("Beräkna din totala köpkostnad och vad bostaden kostar per månad")
+    st.markdown(
+        "Beräkna din totala köpkostnad och vad bostaden kostar per månad")
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
     tab1, tab2 = st.tabs(["💳 Bolånekalkylator", "🧾 Köpkostnadskalkyl"])
@@ -1095,14 +1142,16 @@ elif page == "🏦 Köpkalkyl":
         st.markdown("#### Vad kostar bolånet per månad?")
         col1, col2, col3 = st.columns(3)
         with col1:
-            kop_pris = st.number_input("Köpeskilling (kr)", value=2500000, step=50000, format="%d")
+            kop_pris = st.number_input(
+                "Köpeskilling (kr)", value=2500000, step=50000, format="%d")
             kontant_pct = st.slider("Kontantinsats (%)", 10, 50, 15)
         with col2:
             ranta = st.slider("Bolåneränta (%)", 1.0, 10.0, 4.5, step=0.1)
             amort_pct = st.slider("Amortering (%/år)", 0.0, 3.0, 1.0, step=0.1)
         with col3:
             lan_tid = st.slider("Löptid (år)", 5, 50, 30)
-            avgift_ko = st.number_input("Månadsavgift (kr)", value=3500, step=100, format="%d")
+            avgift_ko = st.number_input(
+                "Månadsavgift (kr)", value=3500, step=100, format="%d")
 
         kontant = int(kop_pris * kontant_pct / 100)
         lan = kop_pris - kontant
@@ -1115,7 +1164,8 @@ elif page == "🏦 Köpkalkyl":
         manads_amort = lan * amort_pct / 100 / 12
         total_manad = manads_ranta + avgift_ko
 
-        st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="custom-divider"></div>',
+                    unsafe_allow_html=True)
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Kontantinsats", f"{kontant:,} kr")
         c2.metric("Lånebelopp", f"{lan:,} kr")
@@ -1127,13 +1177,15 @@ elif page == "🏦 Köpkalkyl":
         with col1:
             total_betalt = manads_ranta * n
             rante_kostnad = total_betalt - lan
-            st.metric("Total räntekostnad (hela lånet)", f"{int(rante_kostnad):,} kr")
+            st.metric("Total räntekostnad (hela lånet)",
+                      f"{int(rante_kostnad):,} kr")
             st.metric("Totalt betalt", f"{int(total_betalt + kontant):,} kr")
         with col2:
             # Amorteringsplan — saldo per år
             saldo = [lan]
             for _ in range(lan_tid):
-                saldo.append(max(0, saldo[-1] * (1 + ranta/100) - manads_ranta * 12))
+                saldo.append(
+                    max(0, saldo[-1] * (1 + ranta/100) - manads_ranta * 12))
             fig = px.area(
                 x=list(range(2026, 2026 + lan_tid + 1)), y=saldo,
                 title="Lånesaldo över tid",
@@ -1153,15 +1205,17 @@ elif page == "🏦 Köpkalkyl":
             lan2 = st.number_input("Nytt bolån (kr)", value=2000000, step=50000,
                                    format="%d", key="lan2")
             befintligt_pantbrev = st.number_input("Befintliga pantbrev (kr)", value=0,
-                                                   step=100000, format="%d")
+                                                  step=100000, format="%d")
             akop = st.selectbox("Köpare", ["Privatperson", "Juridisk person"])
         with col2:
             # Beräkningar
             stampelskatt_pct = 0.015 if akop == "Privatperson" else 0.0425
-            stampelskatt = round(kop2 * stampelskatt_pct / 1000 + 0.5) * 1000  # avrundat uppåt
+            stampelskatt = round(kop2 * stampelskatt_pct /
+                                 1000 + 0.5) * 1000  # avrundat uppåt
             lagfart = 825
             nytt_pantbrev = max(0, lan2 - befintligt_pantbrev)
-            pantbrev_kostnad = int(nytt_pantbrev * 0.02) + (375 if nytt_pantbrev > 0 else 0)
+            pantbrev_kostnad = int(nytt_pantbrev * 0.02) + \
+                (375 if nytt_pantbrev > 0 else 0)
             maklararv = int(kop2 * 0.025)
             total_extra = stampelskatt + lagfart + pantbrev_kostnad
 
@@ -1173,10 +1227,12 @@ elif page == "🏦 Köpkalkyl":
             }
             for namn, belopp in poster.items():
                 st.markdown(f"**{namn}:** {belopp:,} kr")
-            st.markdown(f"*Mäklararvode (ca 2.5%, betalas av säljare):* ~{maklararv:,} kr*")
+            st.markdown(
+                f"*Mäklararvode (ca 2.5%, betalas av säljare):* ~{maklararv:,} kr*")
             st.markdown(f"### Totalt extra: **{total_extra:,} kr**")
-            st.markdown(f"### Total kontantkostnad: **{kop2 + total_extra:,} kr**")
-            st.caption("*Mäklararvodet betalas normalt av säljaren och ingår ej i totalen.")
+            st.markdown(f"### Total kostnad: **{kop2 + total_extra:,} kr**")
+            st.caption(
+                "*Mäklararvodet betalas normalt av säljaren och ingår ej i totalen.")
 
 
 # ============================================================
@@ -1185,36 +1241,47 @@ elif page == "🏦 Köpkalkyl":
 
 elif page == "💼 Investeringskalkyl":
     st.markdown("# 💼 Investeringskalkyl")
-    st.markdown("Beräkna avkastning och lönsamhet för en investeringsfastighet i Örebro")
+    st.markdown(
+        "Beräkna avkastning och lönsamhet för en investeringsfastighet i Örebro")
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        inv_pris = st.number_input("Köpeskilling (kr)", value=2000000, step=50000, format="%d")
-        kontant_inv = st.slider("Kontantinsats (%)", 10, 50, 25, key="inv_kontant")
-        ranta_inv = st.slider("Bolåneränta (%)", 1.0, 10.0, 4.5, step=0.1, key="inv_ranta")
+        inv_pris = st.number_input(
+            "Köpeskilling (kr)", value=2000000, step=50000, format="%d")
+        kontant_inv = st.slider("Kontantinsats (%)", 10,
+                                50, 25, key="inv_kontant")
+        ranta_inv = st.slider("Bolåneränta (%)", 1.0, 10.0,
+                              4.5, step=0.1, key="inv_ranta")
     with col2:
-        hyra = st.number_input("Hyresintäkt/månad (kr)", value=9000, step=500, format="%d")
+        hyra = st.number_input("Hyresintäkt/månad (kr)",
+                               value=9000, step=500, format="%d")
         avgift_inv = st.number_input("Månadsavgift (kr)", value=3500, step=100,
                                      format="%d", key="inv_avgift")
-        drift = st.number_input("Driftkostnad/år (kr)", value=15000, step=1000, format="%d")
+        drift = st.number_input("Driftkostnad/år (kr)",
+                                value=15000, step=1000, format="%d")
     with col3:
-        vakans_pct = st.slider("Vakansgrad (%)", 0, 20, 5, help="Andel av året utan hyresgäst")
-        vardeok_pct = st.slider("Förväntad värdeökning (%/år)", 0.0, 8.0, 3.0, step=0.5)
+        vakans_pct = st.slider("Vakansgrad (%)", 0, 20,
+                               5, help="Andel av året utan hyresgäst")
+        vardeok_pct = st.slider(
+            "Förväntad värdeökning (%/år)", 0.0, 8.0, 3.0, step=0.5)
         horisont = st.slider("Investeringshorisont (år)", 1, 20, 10)
 
     lan_inv = int(inv_pris * (1 - kontant_inv / 100))
     kontant_kr = inv_pris - lan_inv
     r_inv = ranta_inv / 100 / 12
     n_inv = 30 * 12
-    manads_lan = lan_inv * r_inv * (1 + r_inv)**n_inv / ((1 + r_inv)**n_inv - 1) if r_inv > 0 else lan_inv / n_inv
+    manads_lan = lan_inv * r_inv * \
+        (1 + r_inv)**n_inv / ((1 + r_inv)**n_inv -
+                              1) if r_inv > 0 else lan_inv / n_inv
 
     effektiv_hyra = hyra * 12 * (1 - vakans_pct / 100)
     arliga_kostnader = avgift_inv * 12 + drift + manads_lan * 12
     netto_cashflow_ar = effektiv_hyra - arliga_kostnader
     brutto_yield = effektiv_hyra / inv_pris * 100
     netto_yield = netto_cashflow_ar / inv_pris * 100
-    aterbetalning = kontant_kr / netto_cashflow_ar if netto_cashflow_ar > 0 else float('inf')
+    aterbetalning = kontant_kr / \
+        netto_cashflow_ar if netto_cashflow_ar > 0 else float('inf')
 
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
@@ -1231,7 +1298,8 @@ elif page == "💼 Investeringskalkyl":
     st.markdown("---")
     # Värdeutveckling + total avkastning över horisont
     years_inv = list(range(2026, 2026 + horisont + 1))
-    varden = [inv_pris * (1 + vardeok_pct / 100) ** i for i in range(horisont + 1)]
+    varden = [inv_pris * (1 + vardeok_pct / 100) **
+              i for i in range(horisont + 1)]
     ack_cashflow = [max(0, netto_cashflow_ar * i) for i in range(horisont + 1)]
     total_avk = [v + c - inv_pris for v, c in zip(varden, ack_cashflow)]
 
