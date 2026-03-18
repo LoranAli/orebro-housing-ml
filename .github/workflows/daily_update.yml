@@ -25,7 +25,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install selenium webdriver-manager
-      
+          
+      - name: Verify file content
+        run: |
+          echo "=== Line 55-60 ==="
+          sed -n '55,60p' scripts/daily_update.py
+          echo "=== Grep selenium ==="
+          grep -n "selenium" scripts/daily_update.py || echo "No selenium found"
+          
       - name: Run daily update
         run: python scripts/daily_update.py 2>&1
         env:
