@@ -748,10 +748,12 @@ elif page == "🗺️ Karta":
                 active_map['color'] = active_map['bedomning'].map(
                     color_map).fillna('#888888')
 
+                active_map['dot_size'] = active_map['boarea_kvm'].fillna(70).clip(lower=60)
+
                 fig = px.scatter_mapbox(
                     active_map, lat="latitude", lon="longitude",
                     color="bedomning",
-                    size="boarea_kvm",
+                    size="dot_size",
                     color_discrete_map=color_map,
                     size_max=15, zoom=10,
                     hover_data={'utgangspris': ':,.0f',
