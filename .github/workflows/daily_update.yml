@@ -27,14 +27,18 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run daily update
-        run: python scripts/daily_update.py
+        run: python scripts/daily_update.py 2>&1
         env:
-          GITHUB_ACTIONS: "true"   # Skriptet hoppar över git push när detta är satt
+          GITHUB_ACTIONS: "true"
 
       - name: Commit and push updated listings
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f data/processed/active_listings_scored.csv
-          git diff --staged --quiet && echo "Ingen ny data" || \
-            git commit -m "Auto-update live listings $(date +%Y-%m-%d)" && git push
+          if git diff --staged --quiet; then
+            echo "Ingen ny data att committa"
+          else
+            git commit -m "Auto-update live listings $(date +%Y-%m-%d)"
+            git push
+          fi

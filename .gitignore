@@ -7,11 +7,19 @@ venv/
 
 # Data (don't commit raw data)
 data/raw/
-data/processed/
 data/external/
+data/history/
 
-# Models
-models/*.pkl
+# Tillåt processed-filer som Actions behöver
+!data/processed/
+data/processed/*
+!data/processed/orebro_housing_enriched.csv
+!data/processed/orebro_housing_clean.csv
+!data/processed/active_listings_scored.csv
+!data/processed/area_coordinates.csv
+
+# Models — tillåt best_model.pkl (behövs av Actions)
+# models/*.pkl  ← borttaget
 
 # IDE
 .vscode/
