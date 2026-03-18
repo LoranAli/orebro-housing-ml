@@ -1,3 +1,4 @@
+#
 #!/usr/bin/env python3
 """
 Örebro Housing — Daglig uppdatering
