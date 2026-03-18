@@ -23,6 +23,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      - name: Debug
+        run: |
+          echo "=== Commit ==="
+          git log --oneline -1
+          echo "=== Rad 54-60 i daily_update.py ==="
+          sed -n '54,60p' scripts/daily_update.py
+
       - name: Run daily update
         run: python scripts/daily_update.py 2>&1
         env:
