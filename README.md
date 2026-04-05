@@ -1,81 +1,47 @@
-# 🏠 Örebro Housing Intelligence
+# ValuEstate — Örebro Housing Intelligence
 
-**ML-drivet bostadsanalysverktyg för Örebro kommun** — prisprediktering, live fynd-detektor, interaktiv karta och scenarioanalys.
-
-![Python](https://img.shields.io/badge/Python-3.13-blue)
-![XGBoost](https://img.shields.io/badge/XGBoost-Tuned-green)
-![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-red)
-![Data](https://img.shields.io/badge/Data-6%2C600%20bostäder-orange)
+ML-drivet bostadsanalysverktyg för Örebro kommun. Prisprediktering, live fynd-detektor, SHAP-analys och email-notiser via en Streamlit-dashboard.
 
 ---
 
-## Vad är detta?
+## Funktioner
 
-En komplett plattform som hjälper bostadsköpare, mäklare och investerare i Örebro att fatta bättre beslut. Systemet scrapar bostadsdata från Hemnet, tränar ML-modeller och presenterar insikter i en interaktiv dashboard.
+**Marknadsöversikt** — KPI:er, pristrender och fördelningar baserade på 6 600+ sålda bostäder i Örebro (2013–2026).
 
-### Funktioner
+**Prisprediktering** — Ange bostadsparametrar och få ett ML-estimat med konfidensintervall (q10/q90) och jämförbara sålda objekt.
 
-**📊 Marknadsöversikt** — KPI:er, prisfördelning och trender baserade på 6 600+ sålda bostäder i Örebro kommun (2013–2026).
+**Analysera URL** — Klistra in en Hemnet-URL och få direkt ML-estimat, SHAP waterfall-diagram (vad driver priset?) och deal score.
 
-**💰 Prisprediktering** — Skriv in bostadsfeatures och få ett AI-baserat prisestimat med jämförelse mot liknande sålda bostäder.
+**Live Fynd-detektor** — Daglig scraping av aktiva Hemnet-annonser. Varje annons poängsätts (0–100 deal score) och flaggas som fynd, rimligt eller överprissatt.
 
-**🔍 Live Fynd-detektor** — Scrapar aktiva annonser på Hemnet dagligen, kör ML-modellen på varje annons och identifierar undervärderade bostäder. Inkluderar smart rimlighetscheck.
+**Interaktiv karta** — Alla bostäder på karta, färgkodade efter deal score eller pris per m².
 
-**🗺️ Interaktiv karta** — Alla sålda och aktiva bostäder på en karta, färgkodade efter pris per m² eller ML-bedömning (fynd/rimligt/överprissatt).
+**Marknadsanalys** — Pristrender, säsongsvariation, omradesanalys, budkrigsstatistik.
 
-**📈 Marknadsanalys** — Pristrender, säsongsvariation, områdesjämförelse och budkrigsanalys.
+**Scenarioanalys** — Prisprognos 5–15 år med tre scenarier baserade på historiska Örebro-trender.
 
-**🔮 Scenarioanalys** — Prisprognos 5–15 år framåt med tre scenarier: snabb tillväxt, stabil marknad och recession. Baserat på historiska trender i Örebro.
-
----
-
-## Resultat
-
-### Modellprestanda
-
-| Modell | MAE (kr) | R² | MAPE |
-|--------|----------|-----|------|
-| Linear Regression | 568 000 | 0.700 | 26.0% |
-| Ridge Regression | 568 000 | 0.700 | 26.0% |
-| Random Forest | 553 000 | 0.703 | 25.2% |
-| **XGBoost (tuned)** | **504 500** | **0.748** | **22.3%** |
-
-Hyperparameter-tuning via RandomizedSearchCV (50 kombinationer, 5-fold CV).
-
-### Viktiga insikter
-
-- **Boarea** är starkaste prisdrivaren (SHAP importance)
-- **Rynninge** är dyraste området (median 5.4M kr)
-- **Villor** har mest budkrig (53%), lägenheter minst (18%)
-- **Våren** är hetaste säsongen — flest försäljningar och högst priser
-- Priserna dippade 2022–2023 (räntehöjningar) men har återhämtat sig
+**Bevakningar & Email-notiser** — Spara sökfilter (typ, område, maxpris, antal rum, min deal score) och få email när matchande annonser dyker upp.
 
 ---
 
-## Data
+## Modeller
 
-| Källa | Beskrivning | Antal |
-|-------|-------------|-------|
-| **Hemnet** (Selenium) | Slutpriser: boarea, rum, avgift, område, datum | 6 622 listningar |
-| **Hemnet detaljsidor** | Byggår, våning, hiss, balkong, driftkostnad, antal besök | 6 600 sidor |
-| **Hemnet aktiva** | Bostäder till salu just nu — scrapad dagligen | ~700 annonser |
-| **SCB API** | Medelinkomst, befolkning, fastighetspriser | 1 132 rader |
-| **Nominatim/OSM** | Geokodning — koordinater per område | 40 områden |
+Tre separata modeller — en per bostadstyp — tränade med tidsbaserad train/val/test-split:
 
----
+| Modell | Typ | Test R² | Test MAE |
+|--------|-----|---------|----------|
+| Lägenheter | LightGBM + CatBoost stack | ~0.87 | ~180 000 kr |
+| Villor | LightGBM + CatBoost stack (v11) | ~0.76 | ~350 000 kr |
+| Radhus | LightGBM + CatBoost stack (v2) | ~0.72 | ~365 000 kr |
 
-## Tech Stack
-
-| Kategori | Verktyg |
-|----------|---------|
-| **Scraping** | Selenium, BeautifulSoup, requests |
-| **Data** | pandas, NumPy |
-| **ML** | scikit-learn, XGBoost, SHAP, RandomizedSearchCV |
-| **Geokodning** | geopy, Nominatim (OpenStreetMap) |
-| **Visualisering** | Plotly, matplotlib, seaborn |
-| **Dashboard** | Streamlit |
-| **API** | SCB öppna data |
-| **Automatisering** | cron (daglig scraping) |
+Alla modeller använder:
+- Optuna hyperparameter-tuning (80 trials LGBM + 30 trials CatBoost)
+- Target encoding per område med smoothing
+- Spatial neighbor-features via BallTree (grannskap median/vd pris/kvm)
+- SCB DeSO socioekonomiska features (medianinkomst, befolkning m.m.)
+- KMeans geografisk klustring
+- Konfidensintervall via separata q10/q90 quantile-modeller
+- SHAP TreeExplainer för förklarbarhet
 
 ---
 
@@ -84,107 +50,110 @@ Hyperparameter-tuning via RandomizedSearchCV (50 kombinationer, 5-fold CV).
 ```
 orebro-housing-ml/
 ├── dashboard/
-│   └── app.py                          # Streamlit dashboard (6 vyer)
-├── notebooks/
-│   ├── 01_data_collection.ipynb        # Hemnet scraping + SCB API
-│   ├── 02_eda.ipynb                    # Utforskande dataanalys
-│   ├── 03_modeling.ipynb               # ML-modellering + SHAP + tuning
-│   ├── 04_detail_scraper.ipynb         # Scrapa detaljsidor (byggår, hiss etc.)
-│   ├── 05_live_deals.ipynb             # Live fynd-detektor
-│   └── 06_geokodning.ipynb            # Geokodning av områden
+│   └── app.py                  # Streamlit-app (huvud-entrypoint)
 ├── scripts/
-│   └── daily_update.py                 # Automatisk daglig uppdatering
-├── data/
-│   ├── raw/                            # Rå data från Hemnet
-│   ├── processed/                      # Rensad och berikad data
-│   ├── external/                       # SCB-data
-│   └── history/                        # Dagliga snapshots
+│   ├── daily_update.py         # Daglig scraping + scoring + email-notiser
+│   ├── url_analyzer.py         # Hemnet URL → ML-estimat + SHAP
+│   ├── deal_score.py           # Deal score (0–100) per annons
+│   ├── email_alerts.py         # Bevakningsfilter + Gmail SMTP
+│   ├── train_villa_v10.py      # Villor-pipeline (huvud)
+│   ├── train_villa_v11.py      # Villor v11 (CatBoost depth≤6)
+│   └── train_radhus_v2.py      # Radhus-pipeline med DeSO + upplåtelseform
 ├── models/
-│   └── best_model.pkl                  # Tunad XGBoost-modell
-├── logs/                               # Loggfiler från daglig uppdatering
-├── src/                                # Hjälpskript
+│   ├── model_lagenheter.pkl    # Lägenheter-modell
+│   ├── model_villor.pkl        # Villor-modell
+│   └── model_radhus.pkl        # Radhus-modell
+├── data/
+│   ├── raw/                    # Scrapad rådata
+│   └── processed/              # Enrichad dataset (v5)
 ├── requirements.txt
-└── README.md
+└── runtime.txt
 ```
 
 ---
 
 ## Kom igång
 
+### Krav
+
+- Python 3.11
+- Gmail App Password (för email-notiser, valfritt)
+
+### Installation
+
 ```bash
-# 1. Klona
 git clone https://github.com/LoranAli/orebro-housing-ml.git
 cd orebro-housing-ml
-
-# 2. Virtuell miljö
 python -m venv .venv
-source .venv/bin/activate
-
-# 3. Installera
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+```
 
-# 4. Kör notebooks (01 → 06)
+### Kör dashboarden lokalt
 
-# 5. Starta dashboard
+```bash
 streamlit run dashboard/app.py
+```
 
-# 6. Daglig uppdatering (manuellt)
+### Daglig uppdatering (scraping + scoring)
+
+```bash
 python scripts/daily_update.py
+```
 
-# 7. Schemalägg (automatiskt kl 08:00)
-crontab -e
-# Lägg till: 0 8 * * * cd /path/to/project && .venv/bin/python scripts/daily_update.py >> logs/daily.log 2>&1
+Schemaläggs med cron eller GitHub Actions för automatisk körning.
+
+---
+
+## Miljövariabler
+
+Email-notiser kräver:
+
+```bash
+EMAIL_SENDER=dinemail@gmail.com
+EMAIL_PASSWORD=xxxx xxxx xxxx xxxx   # Gmail App Password (16 tecken)
+```
+
+Lokalt: skapa `.env` i projektroten.  
+Streamlit Cloud: lägg till under Settings → Secrets.
+
+---
+
+## Träna om modeller
+
+```bash
+# Villor
+python scripts/train_villa_v11.py
+
+# Radhus
+python scripts/train_radhus_v2.py
+
+# Snabbtest utan Optuna
+python scripts/train_villa_v11.py --no-optuna
+python scripts/train_radhus_v2.py --no-optuna
 ```
 
 ---
 
-## Features (48 st)
+## Tech Stack
 
-**Från Hemnet listningar:** slutpris, boarea, antal_rum, avgift, prisförändring, pris_per_kvm, område, bostadstyp, säljdatum
-
-**Från detaljsidor:** byggår, våning, antal_våningar, hiss, balkong, uteplats, garage, renoverad, driftkostnad, tomtarea, biarea, antal_besök, upplåtelseform
-
-**Engineerade:** bostad_ålder, kvm_per_rum, avgift_per_kvm, avgift_andel, säsong, budkrig, storlek_kategori, omrade_grupp (70 områden)
-
-**Geokodning:** latitude, longitude, avstånd till centrum/station/sjukhus/universitet
-
----
-
-## Live Fynd-detektor
-
-Systemet scrapar dagligen aktiva annonser från Hemnet och bedömer varje annons:
-
-| Bedömning | Betydelse |
-|-----------|-----------|
-| 🟢 Potentiellt fynd | Utgångspris >15% under modellens estimat |
-| 🟡 Rimligt pris | Inom ±5-15% av estimat |
-| 🔴 Överprissatt | Utgångspris >5% över estimat |
-| ⚠️ Osäkert | Avvikelse >60% — modellen saknar data för området |
-
-Smart områdesmatchning (91% matchning) översätter URL-format till modellens 70 omrade_grupp.
+| Kategori | Verktyg |
+|----------|---------|
+| ML | LightGBM, CatBoost, scikit-learn |
+| Hyperparameter-tuning | Optuna |
+| Förklarbarhet | SHAP |
+| Geospatial | BallTree, geopy |
+| Data | pandas, NumPy |
+| Dashboard | Streamlit, Plotly, Folium |
+| Email | smtplib (Gmail SMTP) |
+| Datakälla | Hemnet, SCB DeSO |
 
 ---
 
-## Scenarioanalys
+## Deployment
 
-Tre scenarier baserade på historiska trender i Örebro:
+Projektet är deployat på Streamlit Cloud. Modellfilerna (.pkl) är committade till repot och laddas direkt vid start.
 
-| Scenario | Årlig tillväxt | Baserat på |
-|----------|---------------|------------|
-| 📈 Snabb tillväxt | +5–7%/år | Bästa åren 2019–2021 |
-| ➡️ Stabil marknad | +2–3%/år | Historisk median |
-| 📉 Recession | -2–5%/år | Räntechocken 2022–2023 |
-
----
-
-## Författare
-
-**Loran Ali** — Statistik, Data Analys & BI
-
-[![GitHub](https://img.shields.io/badge/GitHub-LoranAli-black)](https://github.com/LoranAli)
-
----
-
-## Licens
-
-MIT
+```
+runtime.txt  →  python-3.11
+```
