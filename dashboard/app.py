@@ -22,14 +22,14 @@ import glob
 from datetime import datetime, date
 
 def _model_r2(m):
-    """Hämtar R² oavsett om modellen använder 'R2' (v8) eller 'lgbm_test'/'stack_test' (v10)."""
+    """Hämtar bästa test-R² oavsett om modellen använder 'R2' (v8) eller nästlad dict (v10)."""
     met = m.get('metrics', {})
     if 'R2' in met:
         return met['R2']
-    for key in ('lgbm_test', 'stack_test', 'cb_test'):
-        if key in met and isinstance(met[key], dict) and 'R2' in met[key]:
-            return met[key]['R2']
-    return 0.0
+    # v10: ta max av alla test-nycklar
+    candidates = [met[k]['R2'] for k in ('lgbm_test', 'cb_test', 'stack_test')
+                  if k in met and isinstance(met[k], dict) and 'R2' in met[k]]
+    return max(candidates) if candidates else 0.0
 
 # Villa model classes — måste importeras för pickle-deserialisering
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
@@ -2077,7 +2077,8 @@ elif page == "ℹ️ Om modellen":
             mae = m['metrics'].get('MAE') or m['metrics'].get('lgbm_test', {}).get('MAE', 0)
             _conf = m.get('confidence', {})
             ci = _conf.get('interval_pct', '?') if isinstance(_conf, dict) else '?'
-            name = m.get('model_name', '?')
+            _default_names = {'lagenheter': 'Random Forest', 'villor': 'LightGBM + CatBoost', 'radhus': 'CatBoost'}
+            name = m.get('model_name') or _default_names.get(typ, '?')
             nfeat = len(m.get('feature_names', []))
             ci_color = '#ef4444' if isinstance(ci, (int, float)) and ci > 20 else '#f9fafb'
             col_el.markdown(
