@@ -30,7 +30,7 @@ Tre separata modeller — en per bostadstyp — tränade med tidsbaserad train/v
 
 | Modell | Typ | Test R² | Test MAE |
 |--------|-----|---------|----------|
-| Lägenheter | LightGBM + CatBoost stack | ~0.87 | ~180 000 kr |
+| Lägenheter | Random Forest (tuned) | ~0.95 | ~71 000 kr |
 | Villor | LightGBM + CatBoost stack (v11) | ~0.76 | ~350 000 kr |
 | Radhus | LightGBM + CatBoost stack (v2) | ~0.72 | ~365 000 kr |
 
