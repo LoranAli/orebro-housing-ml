@@ -320,6 +320,9 @@ def analyze_url(url: str, models: dict, df_train: pd.DataFrame) -> dict:
         'deal_kategori': deal_kategori,
         'bostadstyp':   typ,
         'omrade':       meta['omrade'],
+        'X':            X,
+        'feature_names': feature_names,
+        'pkg':          pkg,
     }
 
 

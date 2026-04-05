@@ -914,6 +914,93 @@ elif page == "🔍 Analysera URL":
                         f"Konfidensintervall: {result['ci_low']:,} – {result['ci_high']:,} kr "
                         f"(±{result['ci_pct']:.0f}%)")
 
+                    # ── SHAP waterfall ──────────────────────────────────
+                    with st.expander("🔬 Varför detta pris? (SHAP-analys)", expanded=True):
+                        try:
+                            import shap as _shap
+                            _pkg  = result['pkg']
+                            _X    = result['X']
+                            _fnames = result['feature_names']
+
+                            _lgbm = _pkg.get('model_lgbm')
+                            _cb   = _pkg.get('model_catboost')
+                            _w    = _pkg.get('blend_weights', {'lgbm': 0.5, 'cb': 0.5})
+                            _m    = _pkg.get('model')
+
+                            if _lgbm and _cb:
+                                _exp_l = _shap.TreeExplainer(_lgbm)
+                                _exp_c = _shap.TreeExplainer(_cb)
+                                _sv_l  = np.array(_exp_l.shap_values(_X))[0]
+                                _sv_c  = np.array(_exp_c.shap_values(_X))[0]
+                                _sv    = _w.get('lgbm', 0.5) * _sv_l + _w.get('cb', 0.5) * _sv_c
+                                _base  = (_w.get('lgbm', 0.5) * float(np.atleast_1d(_exp_l.expected_value)[0])
+                                         + _w.get('cb',  0.5) * float(np.atleast_1d(_exp_c.expected_value)[0]))
+                            elif _lgbm:
+                                _exp  = _shap.TreeExplainer(_lgbm)
+                                _sv   = np.array(_exp.shap_values(_X))[0]
+                                _base = float(np.atleast_1d(_exp.expected_value)[0])
+                            elif _m:
+                                _exp  = _shap.TreeExplainer(_m)
+                                _sv   = np.array(_exp.shap_values(_X))[0]
+                                _base = float(np.atleast_1d(_exp.expected_value)[0])
+                            else:
+                                raise ValueError("Ingen kompatibel modell för SHAP")
+
+                            # Mänskliga etiketter
+                            _LABELS = {
+                                'boarea_kvm': 'Boarea (m²)', 'antal_rum': 'Antal rum',
+                                'byggar': 'Byggår', 'bostad_alder': 'Bostadsålder',
+                                'tomtarea_kvm': 'Tomtarea (m²)', 'driftkostnad_ar': 'Driftkostnad/år',
+                                'avgift_kr': 'Månadsavgift', 'avgift_per_kvm': 'Avgift/m²',
+                                'kvm_per_rum': 'm² per rum', 'total_yta': 'Total yta',
+                                'omrade_encoded': 'Område', 'omrade_te': 'Område',
+                                'sald_ar': 'Försäljningsår', 'sald_manad': 'Månad',
+                                'har_balkong': 'Balkong', 'har_garage': 'Garage',
+                                'har_uteplats': 'Uteplats', 'har_hiss': 'Hiss',
+                                'har_kallare': 'Källare', 'renoverad': 'Renoverad',
+                                'vaning': 'Våning', 'antal_besok': 'Antal visningar',
+                                'medelinkomst_tkr': 'Medelinkomst (tkr)',
+                                'andel_hogutb_pct': 'Andel högskoleutb. (%)',
+                                'medianinkomst_tkr': 'Medianinkomst (tkr)',
+                                'andel_utrikes_pct': 'Andel utrikes (%)',
+                                'befolkning': 'Befolkning (DeSO)',
+                                'prisforandring_pct': 'Prisförändring (%)',
+                            }
+
+                            # Top-10 features efter |shap|
+                            _idx   = np.argsort(np.abs(_sv))[::-1][:10][::-1]
+                            _vals  = _sv[_idx]
+                            _names = [_LABELS.get(_fnames[i], _fnames[i]) for i in _idx]
+                            _colors = ['#10b981' if v >= 0 else '#ef4444' for v in _vals]
+
+                            _fig = go.Figure(go.Bar(
+                                x=_vals,
+                                y=_names,
+                                orientation='h',
+                                marker_color=_colors,
+                                text=[f"{v/1000:+.0f} tkr" for v in _vals],
+                                textposition='outside',
+                                hovertemplate='%{y}: %{x:,.0f} kr<extra></extra>',
+                            ))
+                            _fig.update_layout(
+                                title=dict(
+                                    text=f"Baslinjeestimat: {_base/1_000_000:.2f} Mkr — topp 10 features",
+                                    font=dict(size=13, color='#9ca3af'),
+                                ),
+                                xaxis_title="Påverkan på pris (kr)",
+                                plot_bgcolor='#111827', paper_bgcolor='#111827',
+                                font=dict(color='#f9fafb', size=12),
+                                xaxis=dict(gridcolor='#374151', zeroline=True,
+                                           zerolinecolor='#6b7280', zerolinewidth=1),
+                                yaxis=dict(gridcolor='#1f2937'),
+                                margin=dict(l=10, r=80, t=40, b=40),
+                                height=360,
+                            )
+                            st.plotly_chart(_fig, use_container_width=True)
+                            st.caption("Grönt = höjer estimatet · Rött = sänker estimatet · Baserat på SHAP TreeExplainer")
+                        except Exception as _e:
+                            st.caption(f"SHAP ej tillgängligt: {_e}")
+
                     with st.expander("📋 Extraherade bostadinformation"):
                         lst = result['listing']
                         cols_info = st.columns(3)
