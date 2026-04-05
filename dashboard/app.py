@@ -980,6 +980,34 @@ elif page == "🔍 Analysera URL":
             </div>""", unsafe_allow_html=True)
             if r.get('ci_low') and r.get('ci_high'):
                 st.caption(f"Konfidensintervall: {int(r['ci_low']):,} – {int(r['ci_high']):,} kr")
+
+            # Jämförbara försäljningar (cachad sökväg)
+            with st.expander("🏘️ Jämförbara försäljningar", expanded=True):
+                _typ_c  = r.get('bostadstyp', '')
+                _omr_c  = r.get('omrade_clean', r.get('omrade', ''))
+                _lst_c  = {'boarea_kvm': r.get('boarea_kvm'), 'antal_rum': r.get('antal_rum'),
+                           'byggar': r.get('byggar', 1970)}
+                _comps_c = find_comparables(df, _lst_c, _typ_c, _omr_c)
+                if _comps_c.empty:
+                    st.caption("Inga jämförbara försäljningar hittades.")
+                else:
+                    _disp_c = _comps_c.copy()
+                    _disp_c.columns = [
+                        {'omrade_clean': 'Område', 'boarea_kvm': 'Boarea (m²)', 'antal_rum': 'Rum',
+                         'byggar': 'Byggår', 'slutpris': 'Slutpris', 'sald_datum': 'Sålt',
+                         'pris_per_kvm': 'Kr/m²'}.get(c, c) for c in _disp_c.columns
+                    ]
+                    if 'Slutpris' in _disp_c.columns:
+                        _disp_c['Slutpris'] = _disp_c['Slutpris'].apply(
+                            lambda x: f"{int(x):,} kr" if pd.notna(x) else '—')
+                    if 'Kr/m²' in _disp_c.columns:
+                        _disp_c['Kr/m²'] = _disp_c['Kr/m²'].apply(
+                            lambda x: f"{int(x):,}" if pd.notna(x) else '—')
+                    if 'Boarea (m²)' in _disp_c.columns:
+                        _disp_c['Boarea (m²)'] = _disp_c['Boarea (m²)'].apply(
+                            lambda x: f"{x:.0f} m²" if pd.notna(x) else '—')
+                    st.dataframe(_disp_c.reset_index(drop=True), use_container_width=True, hide_index=True)
+                    st.caption(f"Senaste 3 åren · Filtrerat på {_typ_c} · Sorterat efter likhet")
         else:
             if v2_models is None:
                 st.error("Modeller ej laddade — live-analys kräver att ML-modellerna är tillgängliga.")
