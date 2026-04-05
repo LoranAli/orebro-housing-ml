@@ -245,6 +245,30 @@ def save_watchlist(wl):
         pass
 
 
+# Email-alerts helpers (wraps scripts/email_alerts.py)
+def _load_email_alerts():
+    try:
+        sys.path.insert(0, os.path.join(BASE_DIR, '..', 'scripts'))
+        from email_alerts import load_alerts
+        return load_alerts()
+    except Exception:
+        return []
+
+def _save_email_alert(email, label, bostadstyp, omraden, max_pris, min_rum, min_deal_score):
+    try:
+        from email_alerts import add_alert
+        return add_alert(email, label, bostadstyp, omraden, max_pris, min_rum, min_deal_score)
+    except Exception as e:
+        return None
+
+def _delete_email_alert(alert_id):
+    try:
+        from email_alerts import delete_alert
+        delete_alert(alert_id)
+    except Exception:
+        pass
+
+
 @st.cache_data
 def get_map_df(_df, _df_coords):
     map_df = _df[_df['latitude'].notna() & (_df['latitude'] != 0)].copy()
@@ -823,6 +847,60 @@ if page == "🔥 Live Fynd":
                     st.session_state.watchlist = []
                     save_watchlist([])
                     st.rerun()
+
+            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+            st.markdown("### 🔔 Email-bevakningar")
+            st.caption("Få ett mail när nya annonser matchar dina kriterier — körs varje natt vid 02:00.")
+
+            # Befintliga alerts
+            _alerts = _load_email_alerts()
+            if _alerts:
+                for _a in _alerts:
+                    _omr_str = ', '.join(_a.get('omraden', [])) or 'Alla'
+                    _col1, _col2 = st.columns([5, 1])
+                    _col1.markdown(
+                        f"**{_a['label']}** &nbsp;·&nbsp; {_a['email']}  \n"
+                        f"<span style='color:#9ca3af;font-size:12px;'>"
+                        f"{_a.get('bostadstyp','alla').capitalize()} · {_omr_str} · "
+                        f"max {int(_a.get('max_pris',0)):,} kr · "
+                        f"min {_a.get('min_rum',1)} rum · "
+                        f"Deal Score ≥ {_a.get('min_deal_score',0)}</span>",
+                        unsafe_allow_html=True,
+                    )
+                    if _col2.button("Ta bort", key=f"del_alert_{_a['id']}"):
+                        _delete_email_alert(_a['id'])
+                        st.rerun()
+            else:
+                st.caption("Inga aktiva bevakningar.")
+
+            # Lägg till ny
+            with st.expander("➕ Lägg till bevakning"):
+                _areas_all = sorted(df['omrade_clean'].dropna().unique().tolist()) if 'omrade_clean' in df.columns else []
+                with st.form("add_alert_form", clear_on_submit=True):
+                    _f_email   = st.text_input("Din email", placeholder="namn@example.com")
+                    _f_label   = st.text_input("Namn på bevakningen", placeholder="Ex: Villa Adolfsberg ≤4Mkr")
+                    _c1, _c2   = st.columns(2)
+                    _f_typ     = _c1.selectbox("Bostadstyp", ["alla", "villor", "lagenheter", "radhus"])
+                    _f_score   = _c2.slider("Min Deal Score", 0, 100, 40, step=5)
+                    _f_omraden = st.multiselect("Område (lämna tomt = alla)", _areas_all)
+                    _c3, _c4   = st.columns(2)
+                    _f_pris    = _c3.number_input("Max utgångspris (kr)", 0, 15_000_000, 3_000_000, step=100_000)
+                    _f_rum     = _c4.number_input("Min antal rum", 1.0, 10.0, 2.0, step=0.5)
+                    if st.form_submit_button("Spara bevakning", type="primary"):
+                        if not _f_email or '@' not in _f_email:
+                            st.error("Ange en giltig email-adress.")
+                        elif not _f_label:
+                            st.error("Ange ett namn på bevakningen.")
+                        else:
+                            _res = _save_email_alert(
+                                _f_email, _f_label, _f_typ,
+                                _f_omraden, int(_f_pris), _f_rum, _f_score,
+                            )
+                            if _res:
+                                st.success(f"Bevakning sparad! Du får mail när nya annonser matchar.")
+                                st.rerun()
+                            else:
+                                st.error("Kunde inte spara bevakning.")
 
 
 # ============================================================

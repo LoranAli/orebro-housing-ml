@@ -1207,6 +1207,13 @@ def main():
     except Exception as e:
         log.warning(f'Git push misslyckades: {e}')
 
+    # Email-notiser
+    try:
+        from email_alerts import run_alerts
+        run_alerts(df_scored[save_cols])
+    except Exception as e:
+        log.warning(f'Email-alerts misslyckades: {e}')
+
     log.info('=' * 60)
     log.info(f'KLART! {len(df_scored)} annonser — {time.time()-start:.0f} sek')
     log.info('=' * 60)
