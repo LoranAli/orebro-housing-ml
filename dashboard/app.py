@@ -304,7 +304,8 @@ with st.sidebar:
 
     page = st.radio(
         "Nav",
-        ["🏠 Översikt", "🔥 Live Fynd", "💰 Prisprediktering", "🗺️ Karta",
+        ["🏠 Översikt", "🔥 Live Fynd", "🔍 Analysera URL",
+         "💰 Prisprediktering", "🗺️ Karta",
          "📈 Marknadsanalys", "🔮 Scenarioanalys",
          "🏦 Köpkalkyl", "💼 Investeringskalkyl", "ℹ️ Om modellen"],
         label_visibility="collapsed"
@@ -828,6 +829,116 @@ if page == "🔥 Live Fynd":
 # 2. PRISPREDIKTERING
 # ============================================================
 
+elif page == "🔍 Analysera URL":
+    st.markdown("# 🔍 Analysera en Hemnet-annons")
+    st.markdown("Klistra in valfri Hemnet-länk — vi hämtar annonsen live och kör ML-modellen.")
+
+    hemnet_url_page = st.text_input(
+        "Hemnet-URL",
+        placeholder="https://www.hemnet.se/bostad/villa-4rum-adolfsberg-orebro-id12345678",
+        key="url_page_input"
+    )
+
+    if hemnet_url_page and st.button("🔍 Analysera nu", type="primary", use_container_width=False):
+        cached = None
+        if df_active is not None and 'url' in df_active.columns:
+            m = df_active[df_active['url'] == hemnet_url_page]
+            if len(m) > 0:
+                cached = m.iloc[0]
+
+        if cached is not None:
+            r     = cached
+            score = r.get('deal_score', 0)
+            kat   = r.get('deal_kategori', 'Okänd')
+            color = DEAL_COLORS.get(kat, '#6b7280')
+            icon  = r.get('deal_ikon', '⚪')
+            st.success("✅ Hittad i dagens scraping")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Deal Score",  f"{score}/100")
+            c2.metric("Utgångspris", f"{int(r.get('utgangspris',0)):,} kr")
+            c3.metric("ML-estimat",  f"{int(r.get('estimerat_varde',0)):,} kr")
+            c4.metric("Avvikelse",   f"{r.get('skillnad_pct',0):.1f}%")
+            st.markdown(f"""<div class="deal-card" style="border-left:3px solid {color};">
+                <span style="font-size:22px;font-weight:700;">{icon} {kat}</span>
+                <p style="color:#9ca3af;margin-top:8px;">{r.get('deal_reasons','')}</p>
+            </div>""", unsafe_allow_html=True)
+            if r.get('ci_low') and r.get('ci_high'):
+                st.caption(f"Konfidensintervall: {int(r['ci_low']):,} – {int(r['ci_high']):,} kr")
+        else:
+            if v2_models is None:
+                st.error("Modeller ej laddade — live-analys kräver att ML-modellerna är tillgängliga.")
+            else:
+                with st.spinner("Hämtar annons och kör modellen..."):
+                    try:
+                        sys.path.insert(0, os.path.join(BASE_DIR, '..', 'scripts'))
+                        from url_analyzer import analyze_url
+                        result = analyze_url(hemnet_url_page, v2_models, df)
+                    except Exception as e:
+                        result = {'ok': False, 'error': str(e)}
+
+                if not result['ok']:
+                    st.error(f"❌ {result['error']}")
+                    st.info("Tips: Hemnet kan ibland blockera automatiska förfrågningar. Prova igen om en stund eller använd manuell input under Prisprediktering.")
+                else:
+                    typ     = result['bostadstyp']
+                    estimat = result['estimat']
+                    utgpris = result['listing'].get('utgangspris', 0)
+                    upct    = result['underval_pct']
+                    score   = result['deal_score']
+                    kat     = result['deal_kategori']
+                    color   = DEAL_COLORS.get(kat, '#6b7280')
+                    icon    = {'Exceptionellt fynd':'🔥','Bra fynd':'⭐',
+                               'Potentiellt intressant':'👀','Rimligt pris':'✅'}.get(kat,'⚪')
+
+                    st.markdown(f"**Område:** {result['omrade']} &nbsp;·&nbsp; **Typ:** {typ}")
+                    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Deal Score",     f"{score}/100")
+                    c2.metric("Utgångspris",    f"{utgpris:,} kr" if utgpris else "—")
+                    c3.metric("ML-estimat",     f"{estimat:,} kr")
+                    c4.metric("Undervärdering", f"{upct:+.1f}%" if utgpris else "—",
+                              delta_color="normal" if upct >= 0 else "inverse")
+
+                    st.markdown(f"""<div class="deal-card" style="border-left:3px solid {color};margin:16px 0;">
+                        <span style="font-size:22px;font-weight:700;">{icon} {kat}</span>
+                        <p style="color:#9ca3af;margin-top:8px;">
+                            Modellen uppskattar marknadsvärdet till <strong>{estimat:,} kr</strong>.
+                            {'Annonsen verkar undervärde rad med ' + str(abs(upct)) + '%.' if upct > 5
+                             else 'Priset är i linje med modellens estimat.' if abs(upct) <= 5
+                             else f'Annonsen kan vara överprissatt med {abs(upct):.0f}%.'}
+                        </p>
+                    </div>""", unsafe_allow_html=True)
+
+                    st.caption(
+                        f"Konfidensintervall: {result['ci_low']:,} – {result['ci_high']:,} kr "
+                        f"(±{result['ci_pct']:.0f}%)")
+
+                    with st.expander("📋 Extraherade bostadinformation"):
+                        lst = result['listing']
+                        cols_info = st.columns(3)
+                        info_items = [
+                            ("Bostadstyp",   typ),
+                            ("Område",       result['omrade']),
+                            ("Boarea",       f"{lst.get('boarea_kvm','?')} m²"),
+                            ("Antal rum",    lst.get('antal_rum','?')),
+                            ("Byggår",       lst.get('byggar','?')),
+                            ("Tomtarea",     f"{lst.get('tomtarea_kvm','?')} m²" if typ=='villor' else '—'),
+                            ("Driftkostnad", f"{lst.get('driftkostnad_ar',0):,} kr/år" if typ=='villor' else '—'),
+                            ("Månadsavgift", f"{lst.get('avgift_kr',0):,} kr/mån" if typ!='villor' else '—'),
+                            ("Energiklass",  lst.get('energiklass','—')),
+                            ("Uppvärmning",  lst.get('uppvarmning','—')),
+                            ("Balkong",      "Ja" if lst.get('har_balkong') else "Nej"),
+                            ("Garage",       "Ja" if lst.get('har_garage') else "Nej"),
+                        ]
+                        for i, (k, v) in enumerate(info_items):
+                            cols_info[i % 3].write(f"**{k}:** {v}")
+
+    elif not hemnet_url_page:
+        st.info("💡 Fungerar med alla aktiva Hemnet-annonser i Örebro — villa, lägenhet och radhus.")
+
+# ============================================================
+
 elif page == "💰 Prisprediktering":
     st.markdown("# 💰 Vad är bostaden värd?")
 
@@ -838,35 +949,104 @@ elif page == "💰 Prisprediktering":
         hemnet_url = st.text_input("Hemnet-URL", placeholder="https://www.hemnet.se/bostad/...")
 
         if hemnet_url and st.button("🔍 Analysera", key="analyze_link", type="primary", use_container_width=True):
+            # Kolla om URL redan finns i daglig scraping (snabb sökväg)
+            cached_result = None
             if df_active is not None and 'url' in df_active.columns:
                 match = df_active[df_active['url'] == hemnet_url]
                 if len(match) > 0:
-                    r = match.iloc[0]
-                    score = r.get('deal_score', 0)
-                    kat = r.get('deal_kategori', 'Okänd')
-                    icon = r.get('deal_ikon', '⚪')
-                    color = DEAL_COLORS.get(kat, '#6b7280')
+                    cached_result = match.iloc[0]
 
-                    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+            if cached_result is not None:
+                r = cached_result
+                score = r.get('deal_score', 0)
+                kat   = r.get('deal_kategori', 'Okänd')
+                icon  = r.get('deal_ikon', '⚪')
+                color = DEAL_COLORS.get(kat, '#6b7280')
 
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Deal Score", f"{score}/100")
-                    c2.metric("Utgångspris", f"{int(r.get('utgangspris', 0)):,} kr")
-                    c3.metric("ML-estimat", f"{int(r.get('estimerat_varde', 0)):,} kr")
-                    c4.metric("Avvikelse", f"{r.get('skillnad_pct', 0):.1f}%")
+                st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+                st.caption("✅ Hittad i dagens scraping")
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Deal Score", f"{score}/100")
+                c2.metric("Utgångspris", f"{int(r.get('utgangspris', 0)):,} kr")
+                c3.metric("ML-estimat",  f"{int(r.get('estimerat_varde', 0)):,} kr")
+                c4.metric("Avvikelse",   f"{r.get('skillnad_pct', 0):.1f}%")
+                st.markdown(f"""
+                <div class="deal-card" style="border-left:3px solid {color};">
+                    <span style="font-size:20px;font-weight:700;">{icon} {kat}</span>
+                    <p style="color:#9ca3af;margin-top:8px;">{r.get('deal_reasons','')}</p>
+                </div>""", unsafe_allow_html=True)
+                if r.get('ci_low') and r.get('ci_high'):
+                    st.caption(f"95% konfidensintervall: {int(r['ci_low']):,} – {int(r['ci_high']):,} kr")
 
-                    st.markdown(f"""
-                    <div class="deal-card" style="border-left: 3px solid {color};">
-                        <span style="font-size:20px;font-weight:700;">{icon} {kat}</span>
-                        <p style="color:#9ca3af;margin-top:8px;">{r.get('deal_reasons', '')}</p>
-                    </div>""", unsafe_allow_html=True)
-
-                    if r.get('ci_low') and r.get('ci_high'):
-                        st.caption(f"95% konfidensintervall: {int(r['ci_low']):,} – {int(r['ci_high']):,} kr")
-                else:
-                    st.warning("Denna bostad finns inte i vår senaste scraping. Testa manuell input istället.")
             else:
-                st.warning("Inga aktiva annonser laddade. Kör daily_update.py först.")
+                # Live-analys via url_analyzer
+                if v2_models is None:
+                    st.error("Modeller ej laddade — live-analys ej tillgänglig.")
+                else:
+                    with st.spinner("🔍 Hämtar och analyserar annonsen..."):
+                        try:
+                            sys.path.insert(0, os.path.join(BASE_DIR, '..', 'scripts'))
+                            from url_analyzer import analyze_url
+                            result = analyze_url(hemnet_url, v2_models, df)
+                        except Exception as e:
+                            result = {'ok': False, 'error': str(e)}
+
+                    if not result['ok']:
+                        st.error(f"❌ {result['error']}")
+                    else:
+                        typ     = result['bostadstyp']
+                        estimat = result['estimat']
+                        utgpris = result['listing'].get('utgangspris', 0)
+                        upct    = result['underval_pct']
+                        score   = result['deal_score']
+                        kat     = result['deal_kategori']
+                        color   = DEAL_COLORS.get(kat, '#6b7280')
+                        icon    = {'Exceptionellt fynd':'🔥','Bra fynd':'⭐',
+                                   'Potentiellt intressant':'👀','Rimligt pris':'✅'}.get(kat,'⚪')
+
+                        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+                        st.caption(f"🌐 Live-analys — {result['omrade']} · {typ}")
+
+                        c1, c2, c3, c4 = st.columns(4)
+                        c1.metric("Deal Score",   f"{score}/100")
+                        c2.metric("Utgångspris",  f"{utgpris:,} kr" if utgpris else "—")
+                        c3.metric("ML-estimat",   f"{estimat:,} kr")
+                        delta_str = f"{upct:+.1f}%" if utgpris else "—"
+                        c4.metric("Undervärdering", delta_str,
+                                  delta_color="normal" if upct >= 0 else "inverse")
+
+                        st.markdown(f"""
+                        <div class="deal-card" style="border-left:3px solid {color};margin-top:12px;">
+                            <span style="font-size:20px;font-weight:700;">{icon} {kat}</span>
+                            <p style="color:#9ca3af;margin-top:8px;">
+                                Modellen uppskattar värdet till <strong>{estimat:,} kr</strong>.
+                                {'Annonsen verkar undervärde rad med ' + str(abs(upct)) + '%.' if upct > 5
+                                 else 'Priset ligger nära modellens estimat.' if abs(upct) <= 5
+                                 else 'Annonsen kan vara överprissatt.'}
+                            </p>
+                        </div>""", unsafe_allow_html=True)
+
+                        st.caption(
+                            f"Konfidensintervall: {result['ci_low']:,} – {result['ci_high']:,} kr "
+                            f"(±{result['ci_pct']:.0f}%)")
+
+                        # Visa scrapad data
+                        with st.expander("📋 Extraherad bostadinformation"):
+                            lst = result['listing']
+                            d = {
+                                'Bostadstyp':    typ,
+                                'Område':        result['omrade'],
+                                'Boarea':        f"{lst.get('boarea_kvm','?')} m²",
+                                'Antal rum':     lst.get('antal_rum','?'),
+                                'Byggår':        lst.get('byggar','?'),
+                                'Tomtarea':      f"{lst.get('tomtarea_kvm','?')} m²" if typ=='villor' else '—',
+                                'Driftkostnad':  f"{lst.get('driftkostnad_ar','?'):,} kr/år" if typ=='villor' else '—',
+                                'Månadsavgift':  f"{lst.get('avgift_kr','?'):,} kr/mån" if typ!='villor' else '—',
+                                'Energiklass':   lst.get('energiklass','—'),
+                                'Uppvärmning':   lst.get('uppvarmning','—'),
+                            }
+                            for k, v in d.items():
+                                st.write(f"**{k}:** {v}")
 
     with tab_manual:
         st.markdown("Fyll i bostadens viktigaste egenskaper för att få ett prisestimat.")
