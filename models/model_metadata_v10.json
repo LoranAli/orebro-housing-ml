@@ -1,0 +1,37 @@
+{
+  "models": {
+    "villor": {
+      "R2_test": 0.7597,
+      "R2_val": 0.8099,
+      "MAE_test": 631363.0,
+      "n_features": 60,
+      "trained_at": "2026-04-05 17:18",
+      "version": "v9",
+      "best_model": "lgbm",
+      "blend_weights": {
+        "lgbm": 0.4,
+        "cb": 0.6
+      }
+    },
+    "radhus": {
+      "R2_test": 0.7226,
+      "MAE_test": 370164.0,
+      "n_features": 44,
+      "trained_at": "2026-04-05 19:18",
+      "blend_weights": {
+        "lgbm": 0.4471,
+        "cb": 0.5529
+      }
+    },
+    "villor_v11": {
+      "R2_test": 0.7597,
+      "MAE_test": 626761.0,
+      "trained_at": "2026-04-05 19:26",
+      "blend_weights": {
+        "lgbm": 0.4,
+        "cb": 0.6
+      },
+      "cb_depth": 4
+    }
+  }
+}

@@ -196,9 +196,10 @@ def load_v2_models():
     for typ in ['lagenheter', 'villor', 'radhus']:
         candidates = [
             os.path.join(MODELS_DIR, f'model_{typ}_v10.pkl'),
+            os.path.join(MODELS_DIR, f'model_{typ}_v2.pkl'),
             os.path.join(MODELS_DIR, f'model_{typ}_v9.pkl'),
             os.path.join(MODELS_DIR, f'model_{typ}.pkl'),
-            os.path.join(MODELS_DIR, 'best_model.pkl'),  # fallback lagenheter
+            os.path.join(MODELS_DIR, 'best_model.pkl'),
         ]
         path = next((p for p in candidates if os.path.exists(p)), None)
         if path:
