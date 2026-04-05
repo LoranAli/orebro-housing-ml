@@ -21,6 +21,44 @@ import json
 import glob
 from datetime import datetime, date
 
+def find_comparables(df_hist: pd.DataFrame, listing: dict, typ: str,
+                     omrade: str, n: int = 5) -> pd.DataFrame:
+    """Hitta n liknande sålda objekt ur historisk data."""
+    boarea  = listing.get('boarea_kvm', 0)
+    rum     = listing.get('antal_rum', 0)
+    byggar  = listing.get('byggar', 1970)
+
+    sub = df_hist[df_hist['bostadstyp'] == typ].copy()
+    if sub.empty:
+        return sub
+
+    # Grundfilter: rimlig storlek (±40%) och rum (±2)
+    if boarea:
+        sub = sub[sub['boarea_kvm'].between(boarea * 0.6, boarea * 1.4)]
+    if rum:
+        sub = sub[sub['antal_rum'].between(max(1, rum - 2), rum + 2)]
+
+    # Recency — senaste 3 åren viktigast
+    max_ar = sub['sald_ar'].max() if not sub.empty else 2026
+    sub = sub[sub['sald_ar'] >= max_ar - 3]
+
+    if sub.empty:
+        return sub
+
+    # Likhetsscore (lägre = mer lik)
+    boarea_diff = ((sub['boarea_kvm'] - boarea) / max(boarea, 1)).abs()
+    rum_diff    = ((sub['antal_rum']  - rum)    / max(rum, 1)).abs()
+    age_diff    = ((sub['byggar']     - byggar)  / 50).abs().clip(0, 1)
+    area_match  = (sub['omrade_clean'].str.lower() != omrade.lower()).astype(float) * 0.3
+
+    sub['_sim'] = boarea_diff * 0.5 + rum_diff * 0.3 + age_diff * 0.1 + area_match
+    sub = sub.nsmallest(n, '_sim')
+
+    cols = ['omrade_clean', 'boarea_kvm', 'antal_rum', 'byggar',
+            'slutpris', 'sald_datum', 'pris_per_kvm']
+    return sub[[c for c in cols if c in sub.columns]]
+
+
 def _model_r2(m):
     """Hämtar bästa test-R² oavsett om modellen använder 'R2' (v8) eller nästlad dict (v10)."""
     met = m.get('metrics', {})
@@ -1078,6 +1116,38 @@ elif page == "🔍 Analysera URL":
                             st.caption("Grönt = höjer estimatet · Rött = sänker estimatet · Baserat på SHAP TreeExplainer")
                         except Exception as _e:
                             st.caption(f"SHAP ej tillgängligt: {_e}")
+
+                    # ── Jämförbara försäljningar ────────────────────────
+                    with st.expander("🏘️ Jämförbara försäljningar", expanded=True):
+                        _comps = find_comparables(
+                            df, result['listing'], result['bostadstyp'], result['omrade']
+                        )
+                        if _comps.empty:
+                            st.caption("Inga jämförbara försäljningar hittades.")
+                        else:
+                            _comps_disp = _comps.copy()
+                            _comps_disp.columns = [
+                                {'omrade_clean': 'Område', 'boarea_kvm': 'Boarea (m²)',
+                                 'antal_rum': 'Rum', 'byggar': 'Byggår',
+                                 'slutpris': 'Slutpris', 'sald_datum': 'Sålt',
+                                 'pris_per_kvm': 'Kr/m²'}.get(c, c)
+                                for c in _comps_disp.columns
+                            ]
+                            if 'Slutpris' in _comps_disp.columns:
+                                _comps_disp['Slutpris'] = _comps_disp['Slutpris'].apply(
+                                    lambda x: f"{int(x):,} kr" if pd.notna(x) else '—')
+                            if 'Kr/m²' in _comps_disp.columns:
+                                _comps_disp['Kr/m²'] = _comps_disp['Kr/m²'].apply(
+                                    lambda x: f"{int(x):,}" if pd.notna(x) else '—')
+                            if 'Boarea (m²)' in _comps_disp.columns:
+                                _comps_disp['Boarea (m²)'] = _comps_disp['Boarea (m²)'].apply(
+                                    lambda x: f"{x:.0f} m²" if pd.notna(x) else '—')
+                            st.dataframe(
+                                _comps_disp.reset_index(drop=True),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                            st.caption(f"Senaste 3 åren · Filtrerat på {result['bostadstyp']} · Sorterat efter likhet")
 
                     with st.expander("📋 Extraherade bostadinformation"):
                         lst = result['listing']
