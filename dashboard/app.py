@@ -1,15 +1,10 @@
 """
-Örebro Housing Intelligence — Dashboard
-=========================================
-Professionellt ML-drivet bostadsanalysverktyg för Örebro kommun.
+ValuEstate — Bostadsanalys med AI
+====================================
+Professionellt ML-drivet bostadsanalysverktyg.
 
-6 vyer:
-1. Översikt — KPI:er och marknadsöversikt
-2. Prisprediktering — ML-baserat prisestimat
-3. Live Fynd — Aktiva annonser bedömda av AI
-4. Karta — Alla bostäder på karta
-5. Marknadsanalys — Trender och säsonger
-6. Scenarioanalys — Prisprognos 5-10 år
+8 vyer: Live Fynd | Prisprediktering | Karta | Marknadsanalys
+        Scenarioanalys | Köpkalkyl | Investeringskalkyl | Om modellen
 
 Kör: streamlit run dashboard/app.py
 """
@@ -21,95 +16,132 @@ import plotly.express as px
 import plotly.graph_objects as go
 import joblib
 import os
-from datetime import datetime
+import sys
+import json
+import glob
+from datetime import datetime, date
+
+def _model_r2(m):
+    """Hämtar R² oavsett om modellen använder 'R2' (v8) eller 'lgbm_test'/'stack_test' (v10)."""
+    met = m.get('metrics', {})
+    if 'R2' in met:
+        return met['R2']
+    for key in ('lgbm_test', 'stack_test', 'cb_test'):
+        if key in met and isinstance(met[key], dict) and 'R2' in met[key]:
+            return met[key]['R2']
+    return 0.0
+
+# Villa model classes — måste importeras för pickle-deserialisering
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
+try:
+    from villa_models import (  # noqa: F401 — krävs för pickle-deserialisering
+        StackingVillaModel, SegmentedVillaModel
+    )
+except ImportError:
+    pass
 
 # ============================================================
-# KONFIGURATION & STYLING
+# CONFIG
 # ============================================================
 
 st.set_page_config(
-    page_title="Örebro Housing Intelligence",
-    page_icon="🏠",
+    page_title="ValuEstate",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS — mörk, modern, professionell
 st.markdown("""
 <style>
-    /* Huvudfärger */
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap');
+
     :root {
-        --primary: #00D4AA;
-        --secondary: #667eea;
-        --danger: #ff6b6b;
-        --warning: #feca57;
-        --bg-dark: #0e1117;
-        --card-bg: #1a1f2e;
-        --text-main: #e0e0e0;
+        --accent: #10b981;
+        --accent-dim: rgba(16, 185, 129, 0.15);
+        --surface: #111827;
+        --surface-2: #1f2937;
+        --surface-3: #374151;
+        --text: #f9fafb;
+        --text-dim: #9ca3af;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+        --gold: #fbbf24;
     }
-    
-    /* Sidebar styling */
+
+    html, body, [class*="css"] {
+        font-family: 'DM Sans', sans-serif;
+    }
+
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f1923 0%, #1a1f2e 100%);
+        background: #0d1117;
+        border-right: 1px solid #1f2937;
     }
-    
-    /* Metric cards */
+
     [data-testid="metric-container"] {
-        background: linear-gradient(135deg, #1a1f2e 0%, #252d3d 100%);
-        border: 1px solid rgba(0, 212, 170, 0.2);
+        background: var(--surface);
+        border: 1px solid var(--surface-3);
         border-radius: 12px;
         padding: 16px;
     }
-    
-    /* Tabs styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
+
+    .stTabs [data-baseweb="tab-list"] { gap: 4px; }
     .stTabs [data-baseweb="tab"] {
         border-radius: 8px;
-        padding: 8px 20px;
+        padding: 8px 16px;
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 500;
     }
-    
-    /* Headers */
-    h1 { letter-spacing: -0.5px; }
-    h2 { letter-spacing: -0.3px; }
-    
-    /* Dataframe styling */
-    .stDataFrame { border-radius: 8px; }
-    
-    /* Hide Streamlit branding */
+
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    
-    /* Custom divider */
-    .custom-divider {
-        height: 2px;
-        background: linear-gradient(90deg, transparent, #00D4AA, transparent);
-        margin: 20px 0;
+    h1, h2, h3 { font-family: 'DM Sans', sans-serif; font-weight: 700; }
+
+    .divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent, #374151, transparent);
+        margin: 24px 0;
     }
+
+    .deal-card {
+        background: var(--surface);
+        border: 1px solid var(--surface-3);
+        border-radius: 14px;
+        padding: 20px;
+        margin: 8px 0;
+        transition: border-color 0.2s;
+    }
+    .deal-card:hover { border-color: var(--accent); }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# SÖKVÄGAR
+# PATHS
 # ============================================================
 
 BASE_DIR = os.path.dirname(__file__)
-DATA_PATH = os.path.join(BASE_DIR, '..', 'data',
-                         'processed', 'orebro_housing_enriched.csv')
-MODEL_PATH = os.path.join(BASE_DIR, '..', 'models', 'best_model.pkl')
-ACTIVE_PATH = os.path.join(BASE_DIR, '..', 'data',
-                           'processed', 'active_listings_scored.csv')
-COORDS_PATH = os.path.join(BASE_DIR, '..', 'data',
-                           'processed', 'area_coordinates.csv')
+DATA_PATH = os.path.join(BASE_DIR, '..', 'data', 'processed', 'orebro_housing_enriched.csv')
+MODELS_DIR = os.path.join(BASE_DIR, '..', 'models')
+ACTIVE_PATH = os.path.join(BASE_DIR, '..', 'data', 'processed', 'active_listings_scored.csv')
+COORDS_PATH = os.path.join(BASE_DIR, '..', 'data', 'processed', 'area_coordinates.csv')
+HISTORY_DIR = os.path.join(BASE_DIR, '..', 'data', 'history')
+WATCHLIST_PATH = os.path.join(BASE_DIR, '..', 'data', 'processed', 'watchlist.json')
 
-# Fallbacks om enriched inte finns
 if not os.path.exists(DATA_PATH):
-    DATA_PATH = os.path.join(BASE_DIR, '..', 'data',
-                             'processed', 'orebro_housing_clean.csv')
+    DATA_PATH = os.path.join(BASE_DIR, '..', 'data', 'processed', 'orebro_housing_clean.csv')
+
+TYP_LABELS = {'lagenheter': 'Lägenheter', 'villor': 'Villor', 'radhus': 'Radhus'}
+TYP_MAP = {'Lägenhet': 'lagenheter', 'Villa': 'villor', 'Radhus': 'radhus'}
+COLOR_MAP = {'Lägenheter': '#10b981', 'Villor': '#6366f1', 'Radhus': '#f43f5e'}
+DEAL_COLORS = {
+    'Exceptionellt fynd': '#fbbf24',
+    'Bra fynd': '#10b981',
+    'Potentiellt intressant': '#f59e0b',
+    'Rimligt pris': '#6b7280',
+}
+FALLBACK_LAT, FALLBACK_LON = 59.2753, 15.2134
 
 # ============================================================
-# LADDA DATA
+# DATA LOADING
 # ============================================================
 
 
@@ -121,10 +153,19 @@ def load_data():
 
 
 @st.cache_resource
-def load_model():
-    if os.path.exists(MODEL_PATH):
-        return joblib.load(MODEL_PATH)
-    return None
+def load_v2_models():
+    models = {}
+    for typ in ['lagenheter', 'villor', 'radhus']:
+        candidates = [
+            os.path.join(MODELS_DIR, f'model_{typ}_v10.pkl'),
+            os.path.join(MODELS_DIR, f'model_{typ}_v9.pkl'),
+            os.path.join(MODELS_DIR, f'model_{typ}.pkl'),
+            os.path.join(MODELS_DIR, 'best_model.pkl'),  # fallback lagenheter
+        ]
+        path = next((p for p in candidates if os.path.exists(p)), None)
+        if path:
+            models[typ] = joblib.load(path)
+    return models if models else None
 
 
 @st.cache_data
@@ -141,239 +182,642 @@ def load_coords():
     return None
 
 
-FALLBACK_LAT, FALLBACK_LON = 59.2753, 15.2134
-TYP_LABELS = {'lagenheter': 'Lägenheter',
-              'villor': 'Villor', 'radhus': 'Radhus'}
-COLOR_MAP = {'Lägenheter': '#00D4AA', 'Villor': '#667eea', 'Radhus': '#ff6b6b'}
+@st.cache_data
+def load_history():
+    """Läs alla historikfiler och returnera first_seen + ursprungspris per URL."""
+    files = sorted(glob.glob(os.path.join(HISTORY_DIR, 'listings_*.csv')))
+    if not files:
+        return None
+    dfs = []
+    for f in files:
+        date_str = os.path.basename(f).replace('listings_', '').replace('.csv', '')
+        try:
+            d = datetime.strptime(date_str, '%Y%m%d').date()
+            tmp = pd.read_csv(f, usecols=lambda c: c in ['url', 'utgangspris'])
+            tmp['history_date'] = d
+            dfs.append(tmp)
+        except Exception:
+            pass
+    if not dfs:
+        return None
+    return pd.concat(dfs, ignore_index=True)
+
+
+def enrich_with_history(df_act, df_hist):
+    """Lägg till dagar_pa_marknaden, pris_sankts, pris_sank_kr på df_act."""
+    if df_hist is None or df_act is None:
+        return df_act
+    today = date.today()
+    first_seen = (df_hist.groupby('url')['history_date'].min().reset_index()
+                  .rename(columns={'history_date': 'forsta_sedd'}))
+    orig_price = (df_hist.sort_values('history_date').groupby('url').first()[['utgangspris']]
+                  .reset_index().rename(columns={'utgangspris': 'ursprungspris'}))
+    df_act = df_act.merge(first_seen, on='url', how='left')
+    df_act = df_act.merge(orig_price, on='url', how='left')
+    df_act['dagar_pa_marknaden'] = df_act['forsta_sedd'].apply(
+        lambda x: (today - x).days if pd.notna(x) else None)
+    df_act['pris_sankts'] = df_act.apply(
+        lambda r: r['ursprungspris'] > r['utgangspris'] if pd.notna(r.get('ursprungspris')) else False, axis=1)
+    df_act['pris_sank_kr'] = df_act.apply(
+        lambda r: int(r['ursprungspris'] - r['utgangspris']) if r['pris_sankts'] else 0, axis=1)
+    return df_act
+
+
+def load_watchlist():
+    if os.path.exists(WATCHLIST_PATH):
+        try:
+            with open(WATCHLIST_PATH, 'r') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
+
+
+def save_watchlist(wl):
+    try:
+        with open(WATCHLIST_PATH, 'w') as f:
+            json.dump(wl, f)
+    except Exception:
+        pass
 
 
 @st.cache_data
 def get_map_df(_df, _df_coords):
-    """Returnerar df med förbättrade koordinater (cachad så loopen bara körs en gång)."""
     map_df = _df[_df['latitude'].notna() & (_df['latitude'] != 0)].copy()
     if _df_coords is None or 'omrade_clean' not in map_df.columns:
         return map_df
-    good_coords = _df_coords[
-        ~((_df_coords['lat'].round(4) == round(FALLBACK_LAT, 4)) &
-          (_df_coords['lon'].round(4) == round(FALLBACK_LON, 4)))
-    ]
+    good = _df_coords[~((_df_coords['lat'].round(4) == round(FALLBACK_LAT, 4)) &
+                         (_df_coords['lon'].round(4) == round(FALLBACK_LON, 4)))]
 
-    def lookup(area_name):
-        if pd.isna(area_name):
+    def lookup(name):
+        if pd.isna(name):
             return None, None
-        match = good_coords[good_coords['omrade'].str.lower()
-                            == str(area_name).lower()]
-        if len(match) > 0:
-            return match.iloc[0]['lat'], match.iloc[0]['lon']
-        prefixes = ['Radhus ', 'Lägenhet ', 'Villa ', 'Fritidshus ', 'Gård/Skog ',
-                    'a Radhus ', 'b Radhus ', 'c Radhus ',
-                    'a Lägenhet ', 'b Lägenhet ', 'c Lägenhet ']
-        for p in prefixes:
-            if str(area_name).startswith(p):
-                s = area_name[len(p):]
-                m = good_coords[good_coords['omrade'].str.lower() == s.lower()]
-                if len(m) > 0:
-                    return m.iloc[0]['lat'], m.iloc[0]['lon']
-        for _, row in good_coords.iterrows():
-            if len(row['omrade']) > 4 and row['omrade'].lower() in str(area_name).lower():
-                return row['lat'], row['lon']
+        m = good[good['omrade'].str.lower() == str(name).lower()]
+        if len(m) > 0:
+            return m.iloc[0]['lat'], m.iloc[0]['lon']
+        for p in ['Radhus ', 'Lägenhet ', 'Villa ']:
+            if str(name).startswith(p):
+                m2 = good[good['omrade'].str.lower() == name[len(p):].lower()]
+                if len(m2) > 0:
+                    return m2.iloc[0]['lat'], m2.iloc[0]['lon']
         return None, None
 
-    fallback_mask = (
-        (map_df['latitude'].round(4) == round(FALLBACK_LAT, 4)) &
-        (map_df['longitude'].round(4) == round(FALLBACK_LON, 4))
-    )
-    for idx in map_df[fallback_mask].index:
+    fb = ((map_df['latitude'].round(4) == round(FALLBACK_LAT, 4)) &
+          (map_df['longitude'].round(4) == round(FALLBACK_LON, 4)))
+    for idx in map_df[fb].index:
         lat, lon = lookup(map_df.at[idx, 'omrade_clean'])
-        if lat is not None:
+        if lat:
             map_df.at[idx, 'latitude'] = lat
             map_df.at[idx, 'longitude'] = lon
     return map_df
 
 
+# Load everything
 df = load_data()
-model_data = load_model()
+v2_models = load_v2_models()
 df_active = load_active()
 df_coords = load_coords()
-map_df_cached = get_map_df(df, df_coords)
+df_history = load_history()
+map_df_cached = get_map_df(df, df_coords) if 'latitude' in df.columns else df
+
+# Enrich active listings with history data (dagar, prissänkning)
+if df_active is not None and df_history is not None:
+    df_active = enrich_with_history(df_active, df_history)
+
+# Session state: watchlist + jämförlista
+if 'watchlist' not in st.session_state:
+    st.session_state.watchlist = load_watchlist()
+if 'compare_urls' not in st.session_state:
+    st.session_state.compare_urls = []
 
 # ============================================================
 # SIDEBAR
 # ============================================================
 
 with st.sidebar:
-    st.markdown("## 🏠 Örebro Housing")
-    st.markdown("#### Intelligence Platform")
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+    st.markdown("## 📊 ValuEstate")
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
     page = st.radio(
-        "Navigation",
-        ["📊 Översikt", "💰 Prisprediktering", "🔍 Live Fynd",
-         "🗺️ Karta", "📈 Marknadsanalys", "🔮 Scenarioanalys",
-         "🏦 Köpkalkyl", "💼 Investeringskalkyl"],
+        "Nav",
+        ["🏠 Översikt", "🔥 Live Fynd", "💰 Prisprediktering", "🗺️ Karta",
+         "📈 Marknadsanalys", "🔮 Scenarioanalys",
+         "🏦 Köpkalkyl", "💼 Investeringskalkyl", "ℹ️ Om modellen"],
         label_visibility="collapsed"
     )
 
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-
-    # Statistik-sidebar
-    st.markdown(f"**Data:** {len(df):,} sålda bostäder")
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.caption(f"📦 {len(df):,} sålda bostäder")
     if df_active is not None:
-        st.markdown(f"**Live:** {len(df_active)} aktiva annonser")
-    if model_data:
-        r2 = model_data['metrics']['R2']
-        st.markdown(f"**Modell:** XGBoost (R² = {r2:.3f})")
-    st.markdown(f"**Område:** Örebro kommun")
-    st.markdown(f"**Period:** 2013–2026")
-
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-    st.markdown("*Byggd av Loran Ali*")
+        st.caption(f"📡 {len(df_active)} aktiva annonser")
+    if v2_models:
+        for typ, m in v2_models.items():
+            st.caption(f"🤖 {TYP_LABELS[typ]}: R²={_model_r2(m):.3f}")
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.caption("Örebro kommun · 2013–2026")
+    st.caption("*Byggd av Loran Ali*")
 
 
 # ============================================================
-# 1. ÖVERSIKT
+# 0. ÖVERSIKT
 # ============================================================
 
-if page == "📊 Översikt":
-    st.markdown("# 📊 Örebro Bostadsmarknad")
-    st.markdown("Realtidsöversikt baserad på 6 600+ sålda bostäder")
+if page == "🏠 Översikt":
+    st.markdown("## Örebro bostadsmarknad")
+    st.caption("Historik & nyckeltal · 2013–2026")
 
-    # KPI:er
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("Medianpris", f"{df['slutpris'].median()/1e6:.1f}M kr")
-    col2.metric("Median kr/m²", f"{df['pris_per_kvm'].median():,.0f}")
-    col3.metric("Antal sålda", f"{len(df):,}")
-    col4.metric("Median boarea", f"{df['boarea_kvm'].median():.0f} m²")
-    if df_active is not None:
-        fynd = len(df_active[df_active['bedomning'].str.contains(
-            'fynd', case=False, na=False)])
-        col5.metric("Live fynd", f"{fynd} st")
-    else:
-        col5.metric("Median rum", f"{df['antal_rum'].median():.0f}")
+    OV_TYPES = [
+        ('lagenheter', 'Lägenheter', '#10b981'),
+        ('villor',     'Villor',     '#3b82f6'),
+        ('radhus',     'Radhus',     '#f59e0b'),
+    ]
 
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+    # ── Delade diagram (alla typer tillsammans) ───────────────
+    ch_l, ch_r = st.columns(2)
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        df_plot = df.copy()
-        df_plot['bostadstyp'] = df_plot['bostadstyp'].map(TYP_LABELS)
-        fig = px.histogram(
-            df_plot, x="slutpris", color="bostadstyp", nbins=50,
-            title="Prisfördelning per bostadstyp",
-            labels={
-                "slutpris": "Slutpris (kr)", "count": "Antal", "bostadstyp": "Typ"},
-            barmode="overlay", opacity=0.7,
-            color_discrete_map=COLOR_MAP,
-        )
-
-        fig.update_layout(
-            template="plotly_dark",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#e0e0e0'),
-            yaxis=dict(title="Antal"),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        # Prisutveckling senaste åren (lättförståelig linjegraf)
-        if 'sald_ar' in df.columns:
-            yearly = df.copy()
-            yearly['bostadstyp'] = yearly['bostadstyp'].map(TYP_LABELS)
-            yearly = yearly.groupby(['sald_ar', 'bostadstyp'])[
-                'slutpris'].median().reset_index()
-            yearly = yearly[yearly['sald_ar'] >= 2018]
-            fig = px.line(
-                yearly, x="sald_ar", y="slutpris", color="bostadstyp",
-                title="Prisutveckling per år",
-                labels={"sald_ar": "År",
-                        "slutpris": "Medianpris (kr)", "bostadstyp": "Typ"},
-                color_discrete_map=COLOR_MAP,
+    with ch_l:
+        st.markdown("**Hur har priserna förändrats över tid?**")
+        st.caption("Typiskt försäljningspris per år, i miljoner kronor")
+        if 'sald_datum' in df.columns and 'slutpris' in df.columns:
+            df_yy = df.copy()
+            df_yy['ar'] = pd.to_datetime(df_yy['sald_datum'], errors='coerce').dt.year
+            df_yy = df_yy.dropna(subset=['ar'])
+            df_yy['ar'] = df_yy['ar'].astype(int)
+            yr_med = (
+                df_yy.groupby(['ar', 'bostadstyp'])['slutpris']
+                .median().reset_index()
+            )
+            yr_med.columns = ['År', 'bostadstyp', 'pris']
+            yr_med['Typ'] = yr_med['bostadstyp'].map(
+                {'lagenheter': 'Lägenheter', 'villor': 'Villor', 'radhus': 'Radhus'}
+            )
+            yr_med['Pris (Mkr)'] = (yr_med['pris'] / 1_000_000).round(2)
+            fig_trend = px.line(
+                yr_med, x='År', y='Pris (Mkr)', color='Typ',
+                color_discrete_map={'Lägenheter': '#10b981', 'Villor': '#3b82f6', 'Radhus': '#f59e0b'},
                 markers=True,
             )
-            fig.update_layout(
-                template="plotly_dark",
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
+            fig_trend.update_traces(line_width=2.5)
+            fig_trend.update_layout(
+                height=260, margin=dict(l=0, r=0, t=10, b=0),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                font_color='#9ca3af', legend_title_text='',
+                legend=dict(orientation='h', y=1.18),
+                yaxis_title='Miljoner kr',
+                yaxis_ticksuffix=' Mkr',
+                xaxis_dtick=1,
             )
-            st.plotly_chart(fig, use_container_width=True)
-
-    # Antal sålda per månad (senaste 12 månaderna)
-    if 'sald_datum' in df.columns:
-        recent = df[df['sald_datum'] >= '2025-01-01'].copy()
-        if len(recent) > 0:
-            monthly = recent.groupby(pd.Grouper(
-                key='sald_datum', freq='ME')).size().reset_index(name='antal')
-            fig = px.bar(
-                monthly, x='sald_datum', y='antal',
-                title="Antal sålda per månad (2025–2026)",
-                labels={"sald_datum": "", "antal": "Antal sålda"},
-                color_discrete_sequence=['#667eea'],
-            )
-            fig.update_layout(
-                template="plotly_dark",
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-    # Topp områden
-    if 'omrade_clean' in df.columns:
-        area_stats = df.groupby('omrade_clean').agg(
-            medianpris=('slutpris', 'median'),
-            antal=('slutpris', 'count'),
-        ).reset_index()
-        area_stats = area_stats[area_stats['antal']
-                                >= 20].nlargest(15, 'medianpris')
-
-        fig = px.bar(
-            area_stats, x="medianpris", y="omrade_clean", orientation="h",
-            title="Topp 15 dyraste områden (min. 20 försäljningar)",
-            labels={"medianpris": "Medianpris (kr)", "omrade_clean": ""},
-            color="medianpris",
-            color_continuous_scale=["#1a1f2e", "#00D4AA"]
-        )
-        fig.update_layout(
-            template="plotly_dark",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            yaxis={'categoryorder': 'total ascending'},
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Senaste försäljningar
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-    st.markdown("### 📋 Senaste försäljningar")
-    if 'sald_datum' in df.columns and 'omrade_clean' in df.columns:
-        dagar = st.slider("Visa senaste X dagar", 7,
-                          90, 30, key="senaste_dagar")
-        cutoff = pd.Timestamp.now() - pd.Timedelta(days=dagar)
-        senaste = df[df['sald_datum'] >= cutoff].copy()
-        senaste['bostadstyp_label'] = senaste['bostadstyp'].map(TYP_LABELS)
-        if len(senaste) > 0:
-            st.caption(
-                f"{len(senaste)} försäljningar de senaste {dagar} dagarna")
-            visa_cols = ['sald_datum', 'omrade_clean', 'bostadstyp_label',
-                         'slutpris', 'pris_per_kvm', 'boarea_kvm', 'antal_rum', 'prisforandring_pct']
-            visa_cols = [c for c in visa_cols if c in senaste.columns]
-            st.dataframe(
-                senaste[visa_cols].sort_values('sald_datum', ascending=False).rename(columns={
-                    'sald_datum': 'Datum', 'omrade_clean': 'Område',
-                    'bostadstyp_label': 'Typ', 'slutpris': 'Slutpris',
-                    'pris_per_kvm': 'kr/m²', 'boarea_kvm': 'Boarea m²',
-                    'antal_rum': 'Rum', 'prisforandring_pct': 'Prisskillnad %'
-                }),
-                use_container_width=True, height=350,
-                column_config={
-                    "Slutpris": st.column_config.NumberColumn(format="%d kr"),
-                    "kr/m²": st.column_config.NumberColumn(format="%d kr"),
-                    "Prisskillnad %": st.column_config.NumberColumn(format="%.1f%%"),
-                }
-            )
+            fig_trend.update_xaxes(showgrid=False)
+            fig_trend.update_yaxes(showgrid=True, gridcolor='#1f2937')
+            st.plotly_chart(fig_trend, use_container_width=True, key="ov_trend")
         else:
-            st.info(
-                f"Inga försäljningar registrerade de senaste {dagar} dagarna.")
+            st.info("Ingen historikdata.")
+
+    with ch_r:
+        st.markdown("**Vad kostar en typisk bostad?**")
+        st.caption("Typiskt pris (mittpris) och vanligt prisintervall per bostadstyp")
+        if 'slutpris' in df.columns and 'bostadstyp' in df.columns:
+            range_rows = []
+            for tk, tl, tc in OV_TYPES:
+                d = df[df['bostadstyp'] == tk]['slutpris'].dropna()
+                if len(d) == 0:
+                    continue
+                range_rows.append({
+                    'Typ': tl,
+                    'color': tc,
+                    'low':  int(d.quantile(0.25)),
+                    'mid':  int(d.median()),
+                    'high': int(d.quantile(0.75)),
+                })
+            if range_rows:
+                fig_range = go.Figure()
+                for i, row in enumerate(range_rows):
+                    # Intervallbar (Q1–Q3)
+                    fig_range.add_trace(go.Bar(
+                        name=row['Typ'],
+                        x=[row['Typ']],
+                        y=[(row['high'] - row['low']) / 1_000_000],
+                        base=row['low'] / 1_000_000,
+                        marker_color=row['color'],
+                        marker_opacity=0.35,
+                        showlegend=False,
+                        hovertemplate=(
+                            f"<b>{row['Typ']}</b><br>"
+                            f"Billigaste (25%): {row['low']/1e6:.2f} Mkr<br>"
+                            f"Typiskt pris: {row['mid']/1e6:.2f} Mkr<br>"
+                            f"Dyraste (75%): {row['high']/1e6:.2f} Mkr<extra></extra>"
+                        ),
+                    ))
+                    # Mittlinje (median)
+                    fig_range.add_trace(go.Scatter(
+                        x=[row['Typ']],
+                        y=[row['mid'] / 1_000_000],
+                        mode='markers+text',
+                        marker=dict(color=row['color'], size=12, symbol='diamond'),
+                        text=[f"{row['mid']/1e6:.1f} Mkr"],
+                        textposition='top center',
+                        textfont=dict(color=row['color'], size=12),
+                        showlegend=False,
+                        hoverinfo='skip',
+                    ))
+                fig_range.update_layout(
+                    height=260, margin=dict(l=0, r=0, t=10, b=0),
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    font_color='#9ca3af', barmode='overlay',
+                    yaxis_title='Miljoner kr', yaxis_ticksuffix=' Mkr',
+                    xaxis_title='',
+                )
+                fig_range.update_xaxes(showgrid=False)
+                fig_range.update_yaxes(showgrid=True, gridcolor='#1f2937')
+                st.plotly_chart(fig_range, use_container_width=True, key="ov_range")
+        else:
+            st.info("Ingen data.")
+
+    st.markdown("---")
+
+    # ── KPI-kort per typ ──────────────────────────────────────
+    for typ_key, typ_label, typ_color in OV_TYPES:
+        df_typ = df[df['bostadstyp'] == typ_key] if 'bostadstyp' in df.columns else pd.DataFrame()
+        df_act_typ = (
+            df_active[df_active['bostadstyp'] == typ_key]
+            if df_active is not None and 'bostadstyp' in df_active.columns
+            else None
+        )
+
+        # Beräkna värden
+        n_sold   = len(df_typ)
+        med_pris = int(df_typ['slutpris'].median()) if n_sold > 0 and 'slutpris' in df_typ.columns else 0
+        if n_sold > 0 and 'slutpris' in df_typ.columns and 'boarea_kvm' in df_typ.columns:
+            kp = df_typ[df_typ['boarea_kvm'] > 0]
+            med_kvm = int((kp['slutpris'] / kp['boarea_kvm']).median()) if len(kp) > 0 else 0
+        else:
+            med_kvm = 0
+        med_rum  = round(df_typ['antal_rum'].median(), 1) if n_sold > 0 and 'antal_rum' in df_typ.columns else 0
+        med_bo   = int(df_typ['boarea_kvm'].median()) if n_sold > 0 and 'boarea_kvm' in df_typ.columns else 0
+        n_active = len(df_act_typ) if df_act_typ is not None else 0
+        score_col_top = 'deal_score_pct' if (df_act_typ is not None and 'deal_score_pct' in df_act_typ.columns) else 'deal_score'
+        top_score = int(df_act_typ[score_col_top].max()) if (df_act_typ is not None and score_col_top in df_act_typ.columns and len(df_act_typ) > 0) else None
+
+        # Typ-specifik extra
+        if typ_key == 'lagenheter':
+            extra_label = "Medianavgift/mån"
+            extra_val   = f"{int(df_typ['avgift_kr'].median()):,} kr" if n_sold > 0 and 'avgift_kr' in df_typ.columns else "–"
+        elif typ_key == 'villor':
+            extra_label = "Mediantomtarea"
+            extra_val   = f"{int(df_typ['tomtarea_kvm'].median())} kvm" if n_sold > 0 and 'tomtarea_kvm' in df_typ.columns and df_typ['tomtarea_kvm'].notna().any() else "–"
+        else:
+            extra_label = "Medianavgift/mån"
+            extra_val   = f"{int(df_typ['avgift_kr'].median()):,} kr" if n_sold > 0 and 'avgift_kr' in df_typ.columns else "–"
+
+        score_html = (
+            f'<div style="text-align:center"><div style="font-size:1.5em;font-weight:700;color:{typ_color}">{top_score}</div>'
+            f'<div style="font-size:0.75em;color:#6b7280">Bästa score</div></div>'
+        ) if top_score is not None else (
+            f'<div style="text-align:center"><div style="font-size:1.5em;font-weight:700;color:#374151">–</div>'
+            f'<div style="font-size:0.75em;color:#6b7280">Bästa score</div></div>'
+        )
+
+        st.markdown(
+            f'<div style="background:#111827;border:1px solid #1f2937;border-radius:14px;'
+            f'padding:20px 24px;margin-bottom:16px;border-top:3px solid {typ_color};">'
+            f'<div style="font-size:1.05em;font-weight:700;color:#f9fafb;margin-bottom:16px">{typ_label}</div>'
+            f'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;text-align:center">'
+            f'<div><div style="font-size:1.4em;font-weight:700;color:{typ_color}">{n_sold:,}</div><div style="font-size:0.72em;color:#6b7280">Sålda</div></div>'
+            f'<div><div style="font-size:1.4em;font-weight:700;color:#f9fafb">{med_pris/1e6:.2f}</div><div style="font-size:0.72em;color:#6b7280">Medianpris Mkr</div></div>'
+            f'<div><div style="font-size:1.4em;font-weight:700;color:#f9fafb">{med_kvm:,}</div><div style="font-size:0.72em;color:#6b7280">Kr/kvm</div></div>'
+            f'<div><div style="font-size:1.4em;font-weight:700;color:#f9fafb">{med_rum}</div><div style="font-size:0.72em;color:#6b7280">Median rum</div></div>'
+            f'<div><div style="font-size:1.4em;font-weight:700;color:#f9fafb">{med_bo}</div><div style="font-size:0.72em;color:#6b7280">Medianboarea kvm</div></div>'
+            f'<div><div style="font-size:1.4em;font-weight:700;color:#f9fafb">{extra_val}</div><div style="font-size:0.72em;color:#6b7280">{extra_label}</div></div>'
+            f'<div><div style="font-size:1.4em;font-weight:700;color:{typ_color}">{n_active}</div><div style="font-size:0.72em;color:#6b7280">Aktiva annonser</div></div>'
+            f'</div></div>',
+            unsafe_allow_html=True,
+        )
+
+
+
+# ============================================================
+# 1. LIVE FYND
+# ============================================================
+
+if page == "🔥 Live Fynd":
+    st.markdown("# 🔥 Fynd just nu")
+
+    if df_active is None:
+        st.info("Kör `scripts/daily_update.py` för att aktivera.")
+    else:
+        has_deal = 'deal_kategori' in df_active.columns
+
+        if 'scrape_datum' in df_active.columns:
+            last_update_str = df_active['scrape_datum'].iloc[0]
+            try:
+                last_update = pd.to_datetime(last_update_str)
+                hours_old = (datetime.now() - last_update).total_seconds() / 3600
+                if hours_old > 36:
+                    st.warning(f"⚠️ Data är {int(hours_old/24)} dagar gammal (senast uppdaterad: {last_update_str}). Kör `scripts/daily_update.py`.")
+                else:
+                    st.caption(f"✅ Uppdaterad: {last_update_str}")
+            except Exception:
+                st.caption(f"Uppdaterad: {last_update_str}")
+
+        # KPIs
+        if has_deal:
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("🔥 Exceptionella", (df_active['deal_kategori'] == 'Exceptionellt fynd').sum())
+            c2.metric("🟢 Bra fynd", (df_active['deal_kategori'] == 'Bra fynd').sum())
+            c3.metric("🟡 Intressanta", (df_active['deal_kategori'] == 'Potentiellt intressant').sum())
+            c4.metric("⚪ Rimligt pris", (df_active['deal_kategori'] == 'Rimligt pris').sum())
+
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+        def render_fynd(data, prefix):
+            if len(data) == 0:
+                st.info("Inga annonser.")
+                return
+
+            # Dölj listings med insane estimates (score=20 default, modellen litar inte på dem)
+            if 'sane_estimate' in data.columns:
+                n_insane = (~data['sane_estimate'].astype(bool)).sum()
+                data = data[data['sane_estimate'].astype(bool)]
+                if n_insane > 0:
+                    st.caption(f"ℹ️ {n_insane} annonser dolda (modellen kunde inte estimera rimligt pris)")
+
+            # Filters
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                if has_deal:
+                    cats = sorted(data['deal_kategori'].unique().tolist())
+                    sel = st.multiselect("Kategori", cats, default=cats, key=f"cat_{prefix}")
+                    data = data[data['deal_kategori'].isin(sel)]
+            with c2:
+                score_col = 'deal_score_pct' if 'deal_score_pct' in data.columns else 'deal_score'
+                if score_col in data.columns:
+                    ms = st.slider("Min score (percentil)", 0, 100, 0, key=f"ms_{prefix}")
+                    data = data[data[score_col] >= ms]
+
+            data = data.sort_values(
+                'deal_score_pct' if 'deal_score_pct' in data.columns else
+                'deal_score' if 'deal_score' in data.columns else 'skillnad_pct',
+                ascending=False)
+            st.caption(f"{len(data)} annonser")
+
+            # Listing cards (top 5)
+            for card_idx, (_, r) in enumerate(data.head(5).iterrows()):
+                # deal_score_pct = percentilrang inom typ (0-100, använder hela skalan)
+                # deal_score     = absolut råpoäng (bas för kategorier)
+                score_pct = int(r.get('deal_score_pct', r.get('deal_score', 0)))
+                score_raw = int(r.get('deal_score', 0))
+                icon = r.get('deal_ikon', '⚪')
+                kat = r.get('deal_kategori', '')
+                color = DEAL_COLORS.get(kat, '#6b7280')
+                typ_l = TYP_LABELS.get(r.get('bostadstyp', ''), '')
+                bo = r.get('boarea_kvm', 0)
+                rum = r.get('antal_rum', 0)
+                avg = r.get('avgift_kr', 0)
+                pris = r.get('utgangspris', 0)
+                est = r.get('estimerat_varde', 0)
+                omr = r.get('omrade', '')
+                url = r.get('url', '#')
+                # Fix: hantera NaN i deal_reasons
+                reasons_raw = str(r.get('deal_reasons', '') or '')
+                ci_lo = r.get('ci_low', None)
+                ci_hi = r.get('ci_high', None)
+                dagar = r.get('dagar_pa_marknaden', None)
+                pris_sankts = r.get('pris_sankts', False)
+                pris_sank_kr = r.get('pris_sank_kr', 0)
+                bostadstyp_r = r.get('bostadstyp', '')
+
+                avg_txt = f" · {int(avg):,} kr/mån" if avg and avg > 0 else ""
+
+                # CI — visa som % istället för stora kr-tal (villor har stor range)
+                if ci_lo and ci_hi and est and est > 0:
+                    try:
+                        ci_range_pct = int((float(ci_hi) - float(ci_lo)) / float(est) * 100)
+                        ci_half = ci_range_pct // 2
+                        ci_color = '#ef4444' if ci_half > 20 else '#f59e0b' if ci_half > 12 else '#9ca3af'
+                        ci_txt = (f"<div style='color:{ci_color};font-size:12px;margin-top:4px;'>"
+                                  f"Modellens osäkerhet: ±{ci_half}%"
+                                  f"<span style='color:#6b7280;'> ({int(float(ci_lo)):,}–{int(float(ci_hi)):,} kr)</span></div>")
+                        # Extra varning för villor (CI > 40% = modellen är svag)
+                        if bostadstyp_r == 'villor' and ci_half > 35:
+                            ci_txt += ("<div style='color:#f59e0b;font-size:11px;margin-top:2px;'>"
+                                       "⚠️ Villamodellen har hög osäkerhet — verifiera mot liknande försäljningar i området</div>")
+                    except Exception:
+                        ci_txt = ""
+                else:
+                    ci_txt = ""
+
+                # Badges — pre-compute utanför f-string
+                badges_parts = []
+                if pd.notna(dagar) and dagar is not None:
+                    try:
+                        d_int = int(dagar)
+                        dag_color = '#ef4444' if d_int >= 60 else '#f59e0b' if d_int >= 30 else '#6b7280'
+                        badges_parts.append(
+                            f"<span style='background:{dag_color}22;color:{dag_color};"
+                            f"border:1px solid {dag_color}55;border-radius:6px;"
+                            f"padding:2px 8px;font-size:11px;font-weight:600;'>🕐 {d_int} dagar</span>")
+                    except Exception:
+                        pass
+                if pris_sankts and pris_sank_kr and pris_sank_kr > 0:
+                    try:
+                        badges_parts.append(
+                            f"<span style='background:#10b98122;color:#10b981;"
+                            f"border:1px solid #10b98155;border-radius:6px;"
+                            f"padding:2px 8px;font-size:11px;font-weight:600;'>"
+                            f"↓ Prissänkt {int(pris_sank_kr):,} kr</span>")
+                    except Exception:
+                        pass
+                badges_html = ("<div style='display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;'>"
+                               + "".join(badges_parts) + "</div>") if badges_parts else ""
+
+                # Top 3 faktorer — safe split
+                top3 = [x.strip() for x in reasons_raw.split('|') if x.strip() and x.strip() != 'nan'][:3]
+                faktor_rows = ""
+                for fi, ftext in enumerate(top3):
+                    faktor_rows += (f"<div style='display:flex;align-items:center;gap:6px;margin-top:4px;'>"
+                                    f"<span style='color:{color};font-size:11px;font-weight:700;'>{fi+1}.</span>"
+                                    f"<span style='color:#d1d5db;font-size:12px;'>{ftext}</span></div>")
+                if faktor_rows:
+                    faktorer_section = ("<div style='margin-top:10px;border-top:1px solid #374151;padding-top:8px;'>"
+                                        "<div style='color:#6b7280;font-size:10px;letter-spacing:0.08em;"
+                                        "margin-bottom:2px;'>VARFÖR DENNA BEDÖMNING</div>"
+                                        + faktor_rows + "</div>")
+                else:
+                    faktorer_section = ""
+
+                typ_label_short = {'lagenheter': 'lägenheter', 'villor': 'villor', 'radhus': 'radhus'}.get(bostadstyp_r, 'objekt')
+                score_tooltip = f"Bättre än {score_pct}% av aktiva {typ_label_short} · Råpoäng: {score_raw}/100"
+                st.markdown(
+                    f'<div class="deal-card" style="border-left: 3px solid {color};">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:baseline;">'
+                    f'<div><span style="font-size:20px;font-weight:700;" title="{score_tooltip}">'
+                    f'{icon} {score_pct}/100</span>'
+                    f'<span style="color:#6b7280;font-size:11px;margin-left:6px;">percentil</span>'
+                    f'<span style="color:{color};font-size:13px;margin-left:8px;">{kat}</span></div>'
+                    f'<span style="color:#9ca3af;">{omr}</span></div>'
+                    f'<div style="color:#9ca3af;font-size:14px;margin:6px 0;">{typ_l} · {bo:.0f} m² · {rum:.0f} rum{avg_txt}</div>'
+                    + badges_html
+                    + '<div style="display:flex;gap:32px;margin-top:12px;">'
+                    f'<div><div style="color:#6b7280;font-size:11px;">UTGÅNGSPRIS</div>'
+                    f'<div style="font-size:17px;font-weight:600;">{pris:,} kr</div></div>'
+                    f'<div><div style="color:#6b7280;font-size:11px;">ML-ESTIMAT</div>'
+                    f'<div style="font-size:17px;font-weight:600;color:#10b981;">{est:,} kr</div></div>'
+                    f'</div>'
+                    + ci_txt
+                    + faktorer_section
+                    + f'<a href="{url}" target="_blank" style="color:#6366f1;text-decoration:none;'
+                    f'font-size:13px;margin-top:10px;display:inline-block;">Visa på Hemnet →</a>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+
+                # Watchlist + Jämför knappar
+                btn_c1, btn_c2, _ = st.columns([1, 1, 4])
+                url_key = str(card_idx) + "_" + prefix
+                is_watched = url in st.session_state.watchlist
+                is_compared = url in st.session_state.compare_urls
+                if btn_c1.button(
+                    "★ Bevakad" if is_watched else "☆ Bevaka",
+                    key=f"wl_{url_key}",
+                    help="Spara i bevakningslistan"
+                ):
+                    if is_watched:
+                        st.session_state.watchlist.remove(url)
+                    else:
+                        st.session_state.watchlist.append(url)
+                    save_watchlist(st.session_state.watchlist)
+                    st.rerun()
+                if btn_c2.button(
+                    "✓ Jämförs" if is_compared else "+ Jämför",
+                    key=f"cmp_{url_key}",
+                    help="Lägg till i jämförvyn (max 3)"
+                ):
+                    if is_compared:
+                        st.session_state.compare_urls.remove(url)
+                    elif len(st.session_state.compare_urls) < 3:
+                        st.session_state.compare_urls.append(url)
+                    st.rerun()
+
+            # Table
+            with st.expander(f"📋 Alla {len(data)} annonser"):
+                tbl = data.copy()
+                if 'deal_reasons' in tbl.columns:
+                    tbl['top_3_faktorer'] = tbl['deal_reasons'].apply(
+                        lambda x: ' | '.join([r.strip() for r in str(x).split('|') if r.strip()][:3])
+                    )
+                cols = [c for c in ['deal_score_pct', 'deal_score', 'deal_kategori', 'omrade', 'bostadstyp',
+                        'utgangspris', 'estimerat_varde', 'skillnad_pct', 'boarea_kvm',
+                        'antal_rum', 'dagar_pa_marknaden', 'pris_sank_kr',
+                        'top_3_faktorer', 'url'] if c in tbl.columns]
+                cc = {
+                    "utgangspris": st.column_config.NumberColumn("Pris", format="%d kr"),
+                    "estimerat_varde": st.column_config.NumberColumn("Estimat", format="%d kr"),
+                    "skillnad_pct": st.column_config.NumberColumn("Diff %", format="%.1f%%"),
+                    "deal_score_pct": st.column_config.ProgressColumn("Score (percentil)", min_value=0, max_value=100, help="Bättre än X% av aktiva annonser av samma typ"),
+                    "deal_score": st.column_config.NumberColumn("Råpoäng", format="%d", help="Absolut poäng 0-100 (bas för kategorier)"),
+                    "deal_kategori": st.column_config.TextColumn("Kategori"),
+                    "dagar_pa_marknaden": st.column_config.NumberColumn("Dagar ute", format="%d d"),
+                    "pris_sank_kr": st.column_config.NumberColumn("Prissänkt", format="%d kr"),
+                    "top_3_faktorer": st.column_config.TextColumn("Top 3 faktorer", width="large"),
+                    "url": st.column_config.LinkColumn("Hemnet", display_text="Öppna"),
+                }
+                st.dataframe(tbl[cols], use_container_width=True, height=400, column_config=cc)
+
+        # Jämför-vy (visas om URLs valda)
+        if st.session_state.compare_urls and df_active is not None:
+            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+            st.markdown("### 🔍 Jämförelse")
+            cmp_data = df_active[df_active['url'].isin(st.session_state.compare_urls)]
+            if len(cmp_data) > 0:
+                cols_cmp = st.columns(len(cmp_data))
+                for col_el, (_, r) in zip(cols_cmp, cmp_data.iterrows()):
+                    with col_el:
+                        kat = r.get('deal_kategori', '')
+                        color = DEAL_COLORS.get(kat, '#6b7280')
+                        icon = r.get('deal_ikon', '⚪')
+                        score = int(r.get('deal_score', 0))
+                        pris = int(r.get('utgangspris', 0))
+                        est = int(r.get('estimerat_varde', 0))
+                        diff = float(r.get('skillnad_pct', 0))
+                        bo = float(r.get('boarea_kvm', 0))
+                        rum = float(r.get('antal_rum', 0))
+                        omr = str(r.get('omrade', ''))
+                        url = str(r.get('url', '#'))
+                        dagar = r.get('dagar_pa_marknaden', None)
+                        reasons_raw = str(r.get('deal_reasons', '') or '')
+                        top3 = [x.strip() for x in reasons_raw.split('|')
+                                if x.strip() and x.strip() != 'nan'][:3]
+                        pris_sank = r.get('pris_sank_kr', 0)
+
+                        # Pre-compute alla html-delar
+                        dagar_html = ""
+                        if pd.notna(dagar) and dagar is not None:
+                            try:
+                                dagar_html = (f"<div style='color:#f59e0b;font-size:11px;"
+                                              f"margin-top:4px;'>🕐 {int(dagar)} dagar ute</div>")
+                            except Exception:
+                                pass
+                        sank_html = ""
+                        if pris_sank and pris_sank > 0:
+                            try:
+                                sank_html = (f"<div style='color:#10b981;font-size:11px;'>"
+                                             f"↓ Prissänkt {int(pris_sank):,} kr</div>")
+                            except Exception:
+                                pass
+                        faktor_lines = ""
+                        for fi, ftext in enumerate(top3):
+                            faktor_lines += (f"<div style='font-size:11px;color:#d1d5db;"
+                                             f"margin-top:3px;'>{fi+1}. {ftext}</div>")
+
+                        html = (
+                            f'<div class="deal-card" style="border-left:3px solid {color};">'
+                            f'<div style="font-size:18px;font-weight:700;">{icon} {score}/100</div>'
+                            f'<div style="color:{color};font-size:12px;">{kat}</div>'
+                            f'<div style="color:#9ca3af;font-size:13px;margin:4px 0;">{omr}</div>'
+                            f'<div style="color:#9ca3af;font-size:12px;">{bo:.0f} m² · {rum:.0f} rum</div>'
+                            + dagar_html + sank_html
+                            + '<hr style="border-color:#374151;margin:10px 0;">'
+                            f'<div style="font-size:12px;color:#6b7280;">UTGÅNGSPRIS</div>'
+                            f'<div style="font-size:16px;font-weight:600;">{pris:,} kr</div>'
+                            f'<div style="font-size:12px;color:#6b7280;margin-top:6px;">ML-ESTIMAT</div>'
+                            f'<div style="font-size:16px;font-weight:600;color:#10b981;">{est:,} kr</div>'
+                            f'<div style="font-size:12px;color:#9ca3af;">Diff: {diff:+.1f}%</div>'
+                            + '<hr style="border-color:#374151;margin:10px 0;">'
+                            + '<div style="font-size:10px;color:#6b7280;letter-spacing:0.08em;">TOP 3 FAKTORER</div>'
+                            + faktor_lines
+                            + f'<a href="{url}" target="_blank" style="color:#6366f1;font-size:12px;'
+                            f'display:inline-block;margin-top:10px;">Visa på Hemnet →</a>'
+                            f'</div>'
+                        )
+                        st.markdown(html, unsafe_allow_html=True)
+            if st.button("🗑️ Rensa jämförelse"):
+                st.session_state.compare_urls = []
+                st.rerun()
+
+        # Tabs per typ + Bevakningslista
+        tabs = st.tabs(["🏠 Alla", "🏢 Lägenheter", "🏡 Villor", "🏘️ Radhus", "★ Bevakade"])
+
+        with tabs[0]:
+            render_fynd(df_active.copy(), "all")
+        with tabs[1]:
+            render_fynd(df_active[df_active['bostadstyp'] == 'lagenheter'].copy(), "lag")
+        with tabs[2]:
+            render_fynd(df_active[df_active['bostadstyp'] == 'villor'].copy(), "vil")
+        with tabs[3]:
+            render_fynd(df_active[df_active['bostadstyp'] == 'radhus'].copy(), "rad")
+        with tabs[4]:
+            if not st.session_state.watchlist:
+                st.info("Du har inga bevakade bostäder. Klicka ☆ Bevaka på en annons.")
+            else:
+                wl_data = df_active[df_active['url'].isin(st.session_state.watchlist)]
+                if len(wl_data) == 0:
+                    st.warning("Bevakade annonser hittades inte i aktiva data (kan ha utgått).")
+                else:
+                    render_fynd(wl_data.copy(), "wl")
+                if st.button("🗑️ Rensa bevakningslista"):
+                    st.session_state.watchlist = []
+                    save_watchlist([])
+                    st.rerun()
 
 
 # ============================================================
@@ -381,951 +825,1228 @@ if page == "📊 Översikt":
 # ============================================================
 
 elif page == "💰 Prisprediktering":
-    st.markdown("# 💰 Prisprediktering")
-    st.markdown("Få ett prisestimat för valfri bostad i Örebro")
+    st.markdown("# 💰 Vad är bostaden värd?")
 
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+    tab_link, tab_manual = st.tabs(["🔗 Hemnet-länk", "✏️ Manuell input"])
 
-    col1, col2, col3 = st.columns(3)
+    with tab_link:
+        st.markdown("Klistra in en Hemnet-länk så analyserar vi bostaden automatiskt.")
+        hemnet_url = st.text_input("Hemnet-URL", placeholder="https://www.hemnet.se/bostad/...")
 
-    with col1:
-        boarea = st.slider("Boarea (m²)", 20, 300, 80)
-        antal_rum = st.selectbox(
-            "Antal rum", [1, 1.5, 2, 3, 4, 5, 6, 7, 8], index=3)
-        bostad_alder = st.slider("Byggnadsår", 1950, 2026, 1990,
-                                 help="Årets datum - byggnadsår = bostadens ålder")
+        if hemnet_url and st.button("🔍 Analysera", key="analyze_link", type="primary", use_container_width=True):
+            if df_active is not None and 'url' in df_active.columns:
+                match = df_active[df_active['url'] == hemnet_url]
+                if len(match) > 0:
+                    r = match.iloc[0]
+                    score = r.get('deal_score', 0)
+                    kat = r.get('deal_kategori', 'Okänd')
+                    icon = r.get('deal_ikon', '⚪')
+                    color = DEAL_COLORS.get(kat, '#6b7280')
 
-    with col2:
-        avgift = st.slider("Månadsavgift (kr)", 0, 12000, 4000, step=100,
-                           help="Sätt till 0 för villor/äganderätt")
-        bostadstyp = st.selectbox(
-            "Bostadstyp", ["Lägenhet", "Villa", "Radhus"])
-        vaning = st.number_input("Våning", min_value=0, max_value=20, value=2,
-                                 help="0 för villa/radhus")
+                    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-    with col3:
-        if model_data is not None:
-            area_groups = sorted([
-                f.replace('omrade_grupp_', '')
-                for f in model_data['feature_names']
-                if f.startswith('omrade_grupp_')
-            ])
-            omrade = st.selectbox("Område", ['övrigt'] + area_groups)
-        elif 'omrade_clean' in df.columns:
-            top_areas = df['omrade_clean'].value_counts().head(
-                70).index.tolist()
-            omrade = st.selectbox("Område", ['övrigt'] + sorted(top_areas))
-        else:
-            omrade = st.selectbox("Område", ["Örebro"])
-        sald_ar = st.selectbox("År (för estimat)", [2024, 2025, 2026], index=2)
-
-    col4, col5, col6 = st.columns(3)
-    with col4:
-        har_balkong = st.checkbox(
-            "🏗️ Balkong/uteplats", value=bostadstyp == "Lägenhet")
-    with col5:
-        har_garage = st.checkbox(
-            "🚗 Garage/carport", value=bostadstyp == "Villa")
-    with col6:
-        renoverad = st.checkbox("🔨 Renoverad")
-
-    if st.button("🔮 Beräkna prisestimat", type="primary", use_container_width=True):
-        if model_data is not None:
-            features = {
-                'boarea_kvm': boarea,
-                'antal_rum': antal_rum,
-                'avgift_kr': avgift,
-                'prisforandring_pct': 0,
-                'sald_ar': sald_ar,
-                'sald_manad': datetime.now().month,
-            }
-
-            features['bostad_alder'] = datetime.now().year - bostad_alder
-            features['har_hiss'] = 1 if bostadstyp == "Lägenhet" else 0
-            features['har_balkong'] = int(har_balkong)
-            features['har_garage'] = int(har_garage)
-            features['renoverad'] = int(renoverad)
-            features['driftkostnad_ar'] = df['driftkostnad_ar'].median(
-            ) if 'driftkostnad_ar' in df.columns else 15000
-            features['tomtarea_kvm'] = 800 if bostadstyp == "Villa" else 0
-            features['vaning'] = vaning
-            features['antal_besok'] = df['antal_besok'].median(
-            ) if 'antal_besok' in df.columns else 3500
-
-            # One-hot bostadstyp
-            features['bostadstyp_radhus'] = 1 if bostadstyp == "Radhus" else 0
-            features['bostadstyp_villor'] = 1 if bostadstyp == "Villa" else 0
-
-            # One-hot område
-            feature_names = model_data['feature_names']
-            for fname in feature_names:
-                if fname.startswith('omrade_grupp_') and fname not in features:
-                    area_name = fname.replace('omrade_grupp_', '')
-                    features[fname] = 1 if omrade == area_name else 0
-
-            X_pred = pd.DataFrame([features])
-            for col in feature_names:
-                if col not in X_pred.columns:
-                    X_pred[col] = 0
-            X_pred = X_pred[feature_names]
-
-            estimate = int(model_data['model'].predict(X_pred)[0])
-
-            st.markdown('<div class="custom-divider"></div>',
-                        unsafe_allow_html=True)
-
-            col1, col2, col3 = st.columns(3)
-            col1.metric("💰 Estimerat pris", f"{estimate:,} kr")
-            col2.metric("📐 Pris per m²", f"{int(estimate/boarea):,} kr/m²")
-            low, high = int(estimate * 0.85), int(estimate * 1.15)
-            col3.metric("📊 Intervall (±15%)", f"{low:,} – {high:,} kr")
-
-            # Jämförelse
-            st.markdown("---")
-            typ_map = {'Lägenhet': 'lagenheter',
-                       'Villa': 'villor', 'Radhus': 'radhus'}
-            similar = df[
-                (df['boarea_kvm'].between(boarea - 15, boarea + 15)) &
-                (df['bostadstyp'] == typ_map[bostadstyp])
-            ]
-            if len(similar) > 0:
-                col1, col2 = st.columns(2)
-                col1.metric("Liknande i datan", f"{len(similar)} st")
-                col2.metric("Deras medianpris",
-                            f"{similar['slutpris'].median():,.0f} kr")
-
-                fig = px.histogram(similar, x="slutpris", nbins=30,
-                                   title=f"Prisfördelning — {bostadstyp.lower()} ({boarea}±15 m²)",
-                                   labels={
-                                       "slutpris": "Slutpris (kr)", "count": "Antal"},
-                                   color_discrete_sequence=['#00D4AA'])
-                fig.add_vline(x=estimate, line_dash="dash", line_color="#ff6b6b",
-                              annotation_text=f"Ditt estimat: {estimate:,} kr")
-                fig.update_layout(
-                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                    yaxis_title="Antal")
-                st.plotly_chart(fig, use_container_width=True)
-
-            # Områdesinfo
-            if omrade != 'övrigt' and 'omrade_clean' in df.columns:
-                omr_data = df[df['omrade_clean'] == omrade]
-                if len(omr_data) > 5:
-                    st.markdown("---")
-                    st.markdown(f"#### 📍 Områdesinfo — {omrade}")
                     c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Medianpris",
-                              f"{omr_data['slutpris'].median()/1e6:.2f}M kr")
-                    c2.metric("Median kr/m²",
-                              f"{omr_data['pris_per_kvm'].median():,.0f}")
-                    if 'prisforandring_pct' in omr_data.columns:
-                        budkrig_pct = (
-                            omr_data['prisforandring_pct'] > 0).mean() * 100
-                        c3.metric("Budkrigsfrekvens", f"{budkrig_pct:.0f}%")
-                    if 'sald_ar' in omr_data.columns:
-                        recent_median = omr_data[omr_data['sald_ar']
-                                                 >= 2023]['slutpris'].median()
-                        old_median = omr_data[omr_data['sald_ar']
-                                              <= 2020]['slutpris'].median()
-                        if old_median > 0:
-                            trend = (recent_median / old_median - 1) * 100
-                            c4.metric("Pristrend (2020→2023+)",
-                                      f"{trend:+.0f}%")
-                    if 'avstand_centrum_km' in omr_data.columns:
-                        st.caption(
-                            f"Avstånd centrum: ~{omr_data['avstand_centrum_km'].median():.1f} km  |  "
-                            f"Station: ~{omr_data['avstand_station_km'].median():.1f} km  |  "
-                            f"Universitetet: ~{omr_data['avstand_universitet_km'].median():.1f} km"
-                        )
+                    c1.metric("Deal Score", f"{score}/100")
+                    c2.metric("Utgångspris", f"{int(r.get('utgangspris', 0)):,} kr")
+                    c3.metric("ML-estimat", f"{int(r.get('estimerat_varde', 0)):,} kr")
+                    c4.metric("Avvikelse", f"{r.get('skillnad_pct', 0):.1f}%")
 
-            # Ladda ner rapport
-            st.markdown("---")
-            rapport_html = f"""
-            <html><head><meta charset='utf-8'>
-            <style>body{{font-family:Arial;margin:40px;color:#222}}
-            h1{{color:#00a080}}table{{border-collapse:collapse;width:100%}}
-            td,th{{border:1px solid #ddd;padding:8px}}th{{background:#f0f0f0}}</style></head>
-            <body>
-            <h1>Örebro Housing Intelligence — Analysrapport</h1>
-            <p><b>Datum:</b> {pd.Timestamp.now().strftime('%Y-%m-%d')}</p>
-            <h2>Indata</h2>
-            <table><tr><th>Parameter</th><th>Värde</th></tr>
-            <tr><td>Bostadstyp</td><td>{bostadstyp}</td></tr>
-            <tr><td>Boarea</td><td>{boarea} m²</td></tr>
-            <tr><td>Antal rum</td><td>{antal_rum}</td></tr>
-            <tr><td>Månadsavgift</td><td>{avgift:,} kr</td></tr>
-            <tr><td>Område</td><td>{omrade}</td></tr>
-            <tr><td>År</td><td>{sald_ar}</td></tr>
-            </table>
-            <h2>Resultat</h2>
-            <table><tr><th>Mått</th><th>Värde</th></tr>
-            <tr><td>Estimerat pris</td><td><b>{estimate:,} kr</b></td></tr>
-            <tr><td>Pris per m²</td><td>{int(estimate/boarea):,} kr/m²</td></tr>
-            <tr><td>Intervall (±15%)</td><td>{low:,} – {high:,} kr</td></tr>
-            </table>
-            <p style='color:#888;font-size:12px;margin-top:40px'>
-            Genererad av Örebro Housing Intelligence | Byggd av Loran Ali<br>
-            Observera: Estimat baseras på ML-modell och ska inte ses som finansiell rådgivning.</p>
-            </body></html>"""
-            st.download_button(
-                "📄 Ladda ner analysrapport (HTML)",
-                data=rapport_html.encode('utf-8'),
-                file_name=f"bostadsanalys_{omrade}_{boarea}m2.html",
-                mime="text/html",
-            )
-        else:
-            st.error("Modellen kunde inte laddas.")
+                    st.markdown(f"""
+                    <div class="deal-card" style="border-left: 3px solid {color};">
+                        <span style="font-size:20px;font-weight:700;">{icon} {kat}</span>
+                        <p style="color:#9ca3af;margin-top:8px;">{r.get('deal_reasons', '')}</p>
+                    </div>""", unsafe_allow_html=True)
+
+                    if r.get('ci_low') and r.get('ci_high'):
+                        st.caption(f"95% konfidensintervall: {int(r['ci_low']):,} – {int(r['ci_high']):,} kr")
+                else:
+                    st.warning("Denna bostad finns inte i vår senaste scraping. Testa manuell input istället.")
+            else:
+                st.warning("Inga aktiva annonser laddade. Kör daily_update.py först.")
+
+    with tab_manual:
+        st.markdown("Fyll i bostadens viktigaste egenskaper för att få ett prisestimat.")
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            bostadstyp = st.selectbox("Bostadstyp", ["Lägenhet", "Villa", "Radhus"])
+            boarea = st.number_input("Boarea (m²)", 20, 400, 80)
+            antal_rum = st.number_input("Antal rum", 1, 12, 3)
+        with c2:
+            typ_key = TYP_MAP[bostadstyp]
+            if v2_models and typ_key in v2_models:
+                _pkg = v2_models[typ_key]
+                # v7+ använder target encoding (te_map_pris) istf omrade_grupp_-dummies
+                if _pkg.get('te_map_pris'):
+                    areas = sorted(_pkg['te_map_pris'].keys())
+                else:
+                    areas = sorted([f.replace('omrade_grupp_', '')
+                                    for f in _pkg['feature_names']
+                                    if f.startswith('omrade_grupp_')])
+            else:
+                areas = sorted(df['omrade_clean'].value_counts().head(70).index.tolist()) if 'omrade_clean' in df.columns else ['Örebro']
+            omrade = st.selectbox("Område", ['övrigt'] + areas)
+            byggar = st.number_input("Byggnadsår", 1900, 2026, 1990)
+            # Avgift visas bara för lägenhet/radhus
+            if bostadstyp != "Villa":
+                avgift = st.number_input("Månadsavgift (kr)", 0, 15000, 3500, step=100)
+            else:
+                avgift = 0
+                st.caption("Ingen månadsavgift för villa")
+        with c3:
+            # Typspecifika features — de som faktiskt påverkar priset mest
+            if bostadstyp == "Lägenhet":
+                vaning = st.number_input("Våning", 0, 20, 2)
+                har_balkong = st.toggle("Balkong", value=True)
+                har_hiss = False
+                har_garage = False
+                har_uteplats = har_balkong
+                tomtarea = 0
+                st.caption("💡 Avgift och område påverkar lägenhetspriset mest")
+            elif bostadstyp == "Villa":
+                tomtarea = st.number_input("Tomtarea (m²)", 100, 5000, 800, step=50)
+                har_garage = st.toggle("Garage/carport", value=True)
+                har_uteplats = st.toggle("Uteplats/altan", value=True)
+                vaning = 0
+                har_balkong = har_uteplats
+                har_hiss = False
+                st.caption("💡 Boarea, tomtarea och område påverkar villapriset mest")
+            else:  # Radhus
+                vaning = st.number_input("Våning", 0, 5, 0)
+                har_balkong = st.toggle("Balkong/uteplats", value=True)
+                har_uteplats = har_balkong
+                har_hiss = False
+                har_garage = False
+                tomtarea = 0
+                st.caption("💡 Boarea och område påverkar radhuspriset mest")
+
+        if st.button("🔮 Beräkna", key="calc_manual", type="primary", use_container_width=True):
+            if v2_models and typ_key in v2_models:
+                pkg = v2_models[typ_key]
+                fnames = pkg['feature_names']
+                df_typ = df[df['bostadstyp'] == typ_key]
+
+                feat = {f: 0 for f in fnames}
+                feat.update({
+                    'boarea_kvm': boarea, 'antal_rum': antal_rum, 'avgift_kr': avgift,
+                    'sald_ar': 2026, 'sald_manad': datetime.now().month,
+                    'sald_kvartal': (datetime.now().month - 1) // 3 + 1,
+                    'bostad_alder': 2026 - byggar, 'vaning': vaning,
+                    'har_hiss': int(har_hiss), 'har_balkong': int(har_balkong),
+                    'har_garage': int(har_garage), 'har_uteplats': int(har_uteplats),
+                    'tomtarea_kvm': tomtarea,
+                    'kvm_per_rum': boarea / max(antal_rum, 1),
+                    'total_yta': boarea + tomtarea * 0.1,
+                    'prisforandring_pct': 0,
+                    'budkrig': 0, 'prissankt': 0, 'renoverad': 0,
+                })
+                if avgift > 0:
+                    feat['avgift_per_kvm'] = avgift / max(boarea, 10)
+                    feat['avgift_andel'] = avgift * 12 / max(boarea * 25000, 1) * 100
+
+                # ── v7+ avancerade features ──────────────────────
+                _is_advanced = (
+                    pkg.get('model_type') in ('lgbm_quantile', 'lgbm_mse', 'catboost')
+                    or pkg.get('version', '') in ('v5', 'v6', 'v7')
+                    or pkg.get('te_map_pris')
+                )
+                if _is_advanced:
+                    # Target encoding
+                    te_pris = pkg.get('te_map_pris', {})
+                    feat['te_omrade_pris'] = te_pris.get(omrade, pkg.get('te_global_pris', 0))
+                    te_kvm = pkg.get('te_map_kvm', {})
+                    feat['te_omrade_kvm'] = te_kvm.get(omrade, pkg.get('te_global_kvm', 0))
+                    # Log-transforms
+                    feat['log_boarea'] = float(np.log(max(boarea, 1)))
+                    feat['log_tomtarea'] = float(np.log1p(tomtarea))
+                    feat['log_driftkostnad'] = 0  # okänt vid manuell input
+                    feat['byggdekad'] = (byggar // 10) * 10
+                    feat['alder_ej_renoverad'] = 2026 - byggar
+                    feat['driftkostnad_per_kvm'] = 0
+                    # Interaktioner
+                    feat['tomt_boarea_interact'] = (tomtarea * boarea) / 1e4
+                    feat['boarea_log_tomt'] = feat['log_boarea'] * feat['log_tomtarea']
+                    omr_hist = feat.get('te_omrade_kvm', feat.get('te_omrade_pris', 0))
+                    feat['omrade_hist_pris_kvm'] = omr_hist
+                    avst_c = df_typ['avstand_centrum_km'].median() if 'avstand_centrum_km' in df_typ.columns else 5
+                    feat['avst_pris_interact'] = (avst_c * omr_hist) / 1000
+                    feat['tomt_avst_interact'] = feat['log_tomtarea'] * avst_c
+                    feat['forvantat_komps_pris'] = df_typ['comps_pris_kvm_90d'].median() * boarea if 'comps_pris_kvm_90d' in df_typ.columns else 0
+                    # KMeans cluster
+                    km = pkg.get('kmeans')
+                    km_sc = pkg.get('kmeans_scaler')
+                    km_fs = pkg.get('kmeans_feats', [])
+                    c_map = pkg.get('cluster_te_map', {})
+                    c_glob = pkg.get('cluster_global', 0)
+                    if km and km_sc and km_fs:
+                        X_c = np.array([[feat.get(f, df_typ[f].median() if f in df_typ.columns else 0) for f in km_fs]])
+                        cid = int(km.predict(km_sc.transform(X_c))[0])
+                        feat['cluster_te'] = c_map.get(cid, c_glob)
+                    else:
+                        feat['cluster_te'] = c_glob
+
+                # Fyll saknade features med medianvärden från träningsdata
+                for col in fnames:
+                    if feat.get(col, 0) == 0 and col in df_typ.columns and not col.startswith('omrade_grupp_'):
+                        med = df_typ[col].median()
+                        if pd.notna(med) and col not in ['prisforandring_pct', 'budkrig', 'prissankt', 'renoverad']:
+                            feat[col] = med
+
+                # Area-dummy (v1–v4 bakåtkompatibilitet)
+                ocol = f'omrade_grupp_{omrade}'
+                if ocol in feat:
+                    feat[ocol] = 1
+
+                X = pd.DataFrame([feat])[fnames].fillna(0)
+                if pkg.get('scaler'):
+                    X = pkg['scaler'].transform(X)
+
+                pred = pkg['model'].predict(X)[0]
+                if pkg.get('log_transform', True):
+                    est = int(np.expm1(pred))
+                    if 'model_q10' in pkg and 'model_q90' in pkg:
+                        ci_lo = int(np.expm1(pkg['model_q10'].predict(X)[0]))
+                        ci_hi = int(np.expm1(pkg['model_q90'].predict(X)[0]))
+                    else:
+                        _c = pkg.get('confidence', {})
+                        std = _c.get('residual_std_log', 0.15) if isinstance(_c, dict) else 0.15
+                        ci_lo = int(np.expm1(pred - 1.96 * std))
+                        ci_hi = int(np.expm1(pred + 1.96 * std))
+                    _c = pkg.get('confidence', {})
+                    ci_pct = _c.get('interval_pct', 15) if isinstance(_c, dict) else 15
+                else:
+                    est = int(pred)
+                    ci_lo, ci_hi, ci_pct = int(est * 0.85), int(est * 1.15), 15
+
+                st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("💰 Estimat", f"{est:,} kr")
+                c2.metric("📐 kr/m²", f"{int(est/boarea):,}")
+                c3.metric("📊 95% CI", f"{ci_lo:,} – {ci_hi:,} kr")
+                c4.metric("🎯 Precision", f"±{ci_pct:.0f}%")
+
+                st.caption(f"Modell: {pkg.get('model_name', '?')} · R² = {_model_r2(pkg):.3f}")
+
+                # Liknande bostäder
+                similar = df[(df['boarea_kvm'].between(boarea - 15, boarea + 15)) &
+                             (df['bostadstyp'] == typ_key)]
+                if len(similar) > 5:
+                    st.markdown("---")
+                    fig = px.histogram(similar, x="slutpris", nbins=30,
+                                       title=f"Liknande {bostadstyp.lower()} ({boarea}±15 m²) — {len(similar)} st",
+                                       color_discrete_sequence=['#10b981'])
+                    fig.add_vline(x=est, line_dash="dash", line_color="#ef4444",
+                                  annotation_text=f"Ditt estimat: {est:,}")
+                    fig.add_vrect(x0=ci_lo, x1=ci_hi, fillcolor="#6366f1", opacity=0.08, line_width=0)
+                    fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
+                                      plot_bgcolor='rgba(0,0,0,0)', yaxis_title="Antal",
+                                      xaxis_title="Slutpris (kr)")
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.error("Modell saknas.")
 
 
 # ============================================================
-# 3. LIVE FYND
-# ============================================================
-
-elif page == "🔍 Live Fynd":
-    st.markdown("# 🔍 Live Fynd-detektor")
-    st.markdown("Bostäder till salu just nu — bedömda av vår ML-modell")
-
-    if df_active is not None:
-        st.markdown('<div class="custom-divider"></div>',
-                    unsafe_allow_html=True)
-
-        # Datum + automatisk uppdatering-info
-        if 'scrape_datum' in df_active.columns:
-            senast = df_active['scrape_datum'].iloc[0]
-            st.success(
-                f"✅ Senast uppdaterad: **{senast}** — uppdateras automatiskt varje dag kl 08:00")
-
-        # KPI:er
-        col1, col2, col3, col4 = st.columns(4)
-        fynd = df_active[df_active['bedomning'].str.contains(
-            'fynd', case=False, na=False)]
-        rimligt = df_active[df_active['bedomning'].str.contains(
-            'Rimligt', case=False, na=False)]
-        overp = df_active[df_active['bedomning'].str.contains(
-            'Överprissatt', case=False, na=False)]
-        osakert = df_active[df_active['bedomning'].str.contains(
-            'Osäkert', case=False, na=False)]
-
-        col1.metric("🟢 Fynd", f"{len(fynd)}")
-        col2.metric("🟡 Rimligt pris", f"{len(rimligt)}")
-        col3.metric("🔴 Överprissatt", f"{len(overp)}")
-        col4.metric("⚠️ Osäkert", f"{len(osakert)}")
-
-        st.markdown('<div class="custom-divider"></div>',
-                    unsafe_allow_html=True)
-
-        # Filter
-        col1, col2 = st.columns(2)
-        with col1:
-            bed_filter = st.multiselect(
-                "Bedömning",
-                df_active['bedomning'].unique().tolist(),
-                default=[b for b in df_active['bedomning'].unique(
-                ) if 'fynd' in b.lower() or 'Rimligt' in b]
-            )
-        with col2:
-            typ_filter = st.multiselect(
-                "Bostadstyp",
-                df_active['bostadstyp'].unique().tolist(),
-                default=df_active['bostadstyp'].unique().tolist()
-            )
-
-        # Filtrera
-        filtered = df_active[
-            (df_active['bedomning'].isin(bed_filter)) &
-            (df_active['bostadstyp'].isin(typ_filter))
-
-        ].sort_values('skillnad_pct', ascending=False)
-
-        st.markdown(f"**Visar {len(filtered)} av {len(df_active)} annonser**")
-
-        # Visa tabell
-        has_url = 'url' in filtered.columns
-        display_cols = (['url'] if has_url else []) + [
-            'omrade', 'bostadstyp', 'utgangspris', 'estimerat_varde',
-            'skillnad_pct', 'boarea_kvm', 'antal_rum', 'bedomning']
-
-        df_display = filtered[display_cols].rename(columns={
-            'url': 'Hemnet', 'omrade': 'Område', 'bostadstyp': 'Typ',
-            'utgangspris': 'Utgångspris', 'estimerat_varde': 'ML-estimat',
-            'skillnad_pct': 'Avvikelse %', 'boarea_kvm': 'Boarea m²',
-            'antal_rum': 'Rum', 'bedomning': 'Bedömning'
-        })
-
-        col_config = {
-            "Utgångspris": st.column_config.NumberColumn(format="%d kr"),
-            "ML-estimat": st.column_config.NumberColumn(format="%d kr"),
-            "Avvikelse %": st.column_config.NumberColumn(format="%.1f%%"),
-        }
-        if has_url:
-            col_config["Hemnet"] = st.column_config.LinkColumn(
-                label="Hemnet 🔗", display_text="Öppna")
-
-        st.dataframe(
-            df_display,
-            use_container_width=True,
-            height=500,
-            column_config=col_config,
-        )
-
-        st.download_button(
-            label="⬇️ Ladda ner som CSV",
-            data=df_display.to_csv(index=False).encode('utf-8'),
-            file_name="live_fynd.csv",
-            mime="text/csv",
-        )
-
-
-# ============================================================
-# 4. KARTA
+# 3. KARTA
 # ============================================================
 
 elif page == "🗺️ Karta":
-    st.markdown("# 🗺️ Bostadskarta — Örebro")
+    st.markdown("# 🗺️ Karta")
 
-    if 'latitude' in df.columns and 'longitude' in df.columns:
-        tab1, tab2 = st.tabs(["Sålda bostäder", "Aktiva annonser"])
+    if 'latitude' not in df.columns:
+        st.info("Kör geokodning först.")
+    else:
+        tab_sold, tab_live = st.tabs(["Sålda bostäder", "Aktiva annonser"])
 
-        with tab1:
-            st.markdown("Sålda bostäder färgkodade efter pris per m²")
+        with tab_sold:
+            typ_k = st.multiselect("Typ", list(TYP_LABELS.values()),
+                                   default=list(TYP_LABELS.values()), key="k_typ")
 
-            # Filter
-            col_f1, col_f2, col_f3 = st.columns(3)
-            with col_f1:
-                typ_karta = st.multiselect(
-                    "Bostadstyp", list(TYP_LABELS.values()),
-                    default=list(TYP_LABELS.values()), key="karta_typ")
-            with col_f2:
-                if 'sald_ar' in map_df_cached.columns:
-                    ar_min = int(map_df_cached['sald_ar'].min())
-                    ar_max = int(map_df_cached['sald_ar'].max())
-                    ar_range = st.slider("Försäljningsår", ar_min, ar_max,
-                                         (ar_min, ar_max), key="karta_ar")
-            with col_f3:
-                pris_max = int(map_df_cached['slutpris'].quantile(0.99))
-                pris_filter = st.slider("Max pris (kr)", 500000, pris_max,
-                                        pris_max, step=100000, key="karta_pris",
-                                        format="%d kr")
+            mdf = map_df_cached.copy()
+            mdf['typ_label'] = mdf['bostadstyp'].map(TYP_LABELS)
+            mdf = mdf[mdf['typ_label'].isin(typ_k)]
+            mdf['pris_per_kvm'] = mdf['pris_per_kvm'].fillna(mdf['pris_per_kvm'].median())
+            mdf = mdf.reset_index(drop=True)
 
-            # Applicera filter
-            map_df = map_df_cached.copy()
-            map_df['bostadstyp_label'] = map_df['bostadstyp'].map(TYP_LABELS)
-            map_df = map_df[map_df['bostadstyp_label'].isin(typ_karta)]
-            if 'sald_ar' in map_df.columns:
-                map_df = map_df[
-                    (map_df['sald_ar'] >= ar_range[0]) &
-                    (map_df['sald_ar'] <= ar_range[1])
-                ]
-            map_df = map_df[map_df['slutpris'] <= pris_filter]
+            # Jitter
+            np.random.seed(42)
+            mdf['lat_j'] = mdf['latitude'] + np.random.uniform(-0.001, 0.001, len(mdf))
+            mdf['lon_j'] = mdf['longitude'] + np.random.uniform(-0.001, 0.001, len(mdf))
 
-            st.caption(
-                f"Visar {len(map_df):,} av {len(map_df_cached):,} bostäder")
+            st.caption(f"{len(mdf):,} bostäder — klicka på en punkt för detaljer")
 
-            map_df = map_df.copy()
-            map_df['boarea_kvm'] = map_df['boarea_kvm'].fillna(
-                map_df['boarea_kvm'].median())
-            map_df['pris_per_kvm'] = map_df['pris_per_kvm'].fillna(
-                map_df['pris_per_kvm'].median())
-            map_df['latitude'] = map_df['latitude'] + \
-                np.random.uniform(-0.002, 0.002, len(map_df))
-            map_df['longitude'] = map_df['longitude'] + \
-                np.random.uniform(-0.002, 0.002, len(map_df))
-            map_df['dot_size'] = map_df['boarea_kvm'].clip(lower=60)
+            # Lägg till index-kolumn för klick-identifiering
+            mdf['_idx'] = mdf.index
+
+            hover_cols = {c: True for c in ['slutpris', 'boarea_kvm', 'pris_per_kvm',
+                                             'antal_rum', 'sald_datum', '_idx']
+                         if c in mdf.columns}
+            hover_cols['lat_j'] = False
+            hover_cols['lon_j'] = False
 
             fig = px.scatter_mapbox(
-                map_df, lat="latitude", lon="longitude",
-                color="pris_per_kvm", size="dot_size",
-                color_continuous_scale=[
-                    "#1a1f2e", "#667eea", "#00D4AA", "#feca57", "#ff6b6b"],
-                size_max=15, zoom=10,
-                hover_name="omrade_clean" if 'omrade_clean' in map_df.columns else None,
-                hover_data={'slutpris': ':,.0f',
-                            'boarea_kvm': ':.0f', 'bostadstyp': True},
-                title="Sålda bostäder — pris per m²",
-                mapbox_style="carto-darkmatter",
+                mdf, lat="lat_j", lon="lon_j",
+                color="pris_per_kvm",
+                color_continuous_scale=["#3b82f6", "#10b981", "#f59e0b", "#ef4444"],
+                size_max=6, zoom=11,
+                hover_name="omrade_clean" if 'omrade_clean' in mdf.columns else None,
+                hover_data=hover_cols,
+                mapbox_style="carto-positron",
+                custom_data=[c for c in ['_idx', 'slutpris', 'boarea_kvm', 'antal_rum',
+                                         'pris_per_kvm', 'sald_datum', 'omrade_clean',
+                                         'bostadstyp'] if c in mdf.columns],
             )
-            fig.update_layout(
-                height=600, paper_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0e0e0'))
-            st.plotly_chart(fig, use_container_width=True)
+            fig.update_traces(marker=dict(size=6, opacity=0.75))
+            fig.update_layout(height=600, paper_bgcolor='rgba(0,0,0,0)',
+                              margin=dict(l=0, r=0, t=0, b=0))
 
-        with tab2:
+            sel = st.plotly_chart(fig, use_container_width=True,
+                                  on_select="rerun", selection_mode="points",
+                                  key=f"sold_map_{str(typ_k)}")
+
+            # Klick → detaljpanel
+            pts = sel.get("selection", {}).get("points", []) if sel else []
+            if pts:
+                pt = pts[0]
+                cd = pt.get("customdata", [])
+                # customdata ordning: _idx, slutpris, boarea_kvm, antal_rum, pris_per_kvm, sald_datum, omrade_clean, bostadstyp
+                def _cd(i, fallback="—"):
+                    try:
+                        v = cd[i]
+                        return v if v is not None else fallback
+                    except Exception:
+                        return fallback
+
+                idx_val   = _cd(0)
+                slutpris  = _cd(1)
+                boarea    = _cd(2)
+                rum       = _cd(3)
+                kvm_pris  = _cd(4)
+                datum     = _cd(5)
+                omrade    = _cd(6)
+                typ_val   = _cd(7)
+
+                typ_label = TYP_LABELS.get(str(typ_val), str(typ_val))
+                pris_fmt  = f"{int(float(slutpris)):,} kr" if slutpris != "—" else "—"
+                kvm_fmt   = f"{int(float(kvm_pris)):,} kr/m²" if kvm_pris != "—" else "—"
+                bo_fmt    = f"{float(boarea):.0f} m²" if boarea != "—" else "—"
+                rum_fmt   = f"{float(rum):.0f} rum" if rum != "—" else "—"
+
+                # Hämta prisförändring om möjligt
+                extra_html = ""
+                if idx_val != "—":
+                    try:
+                        row = mdf.loc[int(idx_val)]
+                        pf_pct = row.get('prisforandring_pct', None)
+                        budkrig = row.get('budkrig', None)
+                        byggar = row.get('byggar', None)
+                        avgift = row.get('avgift_kr', None)
+
+                        if pf_pct is not None and pd.notna(pf_pct):
+                            pf_color = '#10b981' if pf_pct > 0 else '#ef4444'
+                            pf_label = f"Budkrig +{pf_pct:.1f}%" if pf_pct > 0 else f"Prissänkt {pf_pct:.1f}%"
+                            extra_html += (f"<div style='display:flex;justify-content:space-between;"
+                                           f"padding:6px 0;border-bottom:1px solid #374151;'>"
+                                           f"<span style='color:#6b7280;font-size:13px;'>Prisskillnad</span>"
+                                           f"<span style='color:{pf_color};font-weight:600;'>{pf_label}</span></div>")
+                        if byggar is not None and pd.notna(byggar):
+                            extra_html += (f"<div style='display:flex;justify-content:space-between;"
+                                           f"padding:6px 0;border-bottom:1px solid #374151;'>"
+                                           f"<span style='color:#6b7280;font-size:13px;'>Byggår</span>"
+                                           f"<span>{int(byggar)}</span></div>")
+                        if avgift is not None and pd.notna(avgift) and float(avgift) > 0:
+                            extra_html += (f"<div style='display:flex;justify-content:space-between;"
+                                           f"padding:6px 0;border-bottom:1px solid #374151;'>"
+                                           f"<span style='color:#6b7280;font-size:13px;'>Avgift</span>"
+                                           f"<span>{int(float(avgift)):,} kr/mån</span></div>")
+                    except Exception:
+                        pass
+
+                st.markdown(
+                    f'<div style="background:#1f2937;border:1px solid #374151;border-radius:14px;'
+                    f'padding:20px;margin-top:12px;">'
+                    f'<div style="font-size:18px;font-weight:700;margin-bottom:4px;">{omrade}</div>'
+                    f'<div style="color:#9ca3af;font-size:13px;margin-bottom:16px;">'
+                    f'{typ_label} · {datum}</div>'
+                    f'<div style="display:flex;gap:32px;margin-bottom:16px;">'
+                    f'<div><div style="color:#6b7280;font-size:11px;">SLUTPRIS</div>'
+                    f'<div style="font-size:22px;font-weight:700;color:#10b981;">{pris_fmt}</div></div>'
+                    f'<div><div style="color:#6b7280;font-size:11px;">KR/M²</div>'
+                    f'<div style="font-size:22px;font-weight:700;">{kvm_fmt}</div></div>'
+                    f'<div><div style="color:#6b7280;font-size:11px;">STORLEK</div>'
+                    f'<div style="font-size:22px;font-weight:700;">{bo_fmt} · {rum_fmt}</div></div>'
+                    f'</div>'
+                    + extra_html +
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+
+        with tab_live:
             if df_active is not None and df_coords is not None:
-                st.markdown("Aktiva annonser färgkodade efter bedömning")
+                typ_tabs = st.tabs(["Alla", "Lägenheter", "Villor", "Radhus"])
 
-                # Koppla koordinater till aktiva annonser
-                active_map = df_active.merge(
-                    df_coords.rename(
-                        columns={'omrade': 'omrade_coord', 'lat': 'latitude', 'lon': 'longitude'}),
-                    left_on='omrade', right_on='omrade_coord', how='left'
-                )
-                active_map = active_map[active_map['latitude'].notna()]
-                active_map['boarea_kvm'] = active_map['boarea_kvm'].fillna(70)
-                active_map['latitude'] = active_map['latitude'] + \
-                    np.random.uniform(-0.003, 0.003, len(active_map))
-                active_map['longitude'] = active_map['longitude'] + \
-                    np.random.uniform(-0.003, 0.003, len(active_map))
+                # Bygg en snabb coord-lookup med case-insensitive + prefix-strippning
+                _coords_index = {row['omrade'].lower().strip(): (row['lat'], row['lon'])
+                                 for _, row in df_coords.iterrows()}
+                _PREFIXES = ['radhus ', 'lägenhet ', 'villa ', 'radhus', 'lägenhet', 'villa']
 
-                # Färgkoda efter bedömning
-                color_map = {
-                    '🟢 Potentiellt fynd': '#00D4AA',
-                    '🟡 Rimligt pris': '#feca57',
-                    '🔴 Överprissatt': '#ff6b6b',
-                    '⚠️ Osäkert': '#888888',
-                }
-                active_map['color'] = active_map['bedomning'].map(
-                    color_map).fillna('#888888')
+                def _lookup_coord(name):
+                    if pd.isna(name):
+                        return None, None
+                    key = str(name).lower().strip()
+                    if key in _coords_index:
+                        return _coords_index[key]
+                    for p in _PREFIXES:
+                        if key.startswith(p):
+                            stripped = key[len(p):].strip()
+                            if stripped in _coords_index:
+                                return _coords_index[stripped]
+                    return None, None
 
-                active_map['dot_size'] = active_map['boarea_kvm'].fillna(
-                    70).clip(lower=60)
+                def show_live_map(data):
+                    if len(data) == 0:
+                        st.info("Inga annonser.")
+                        return
+                    am = data.copy()
+                    lats, lons = [], []
+                    for _, row in am.iterrows():
+                        lat, lon = _lookup_coord(row.get('omrade', ''))
+                        lats.append(lat)
+                        lons.append(lon)
+                    am['latitude'] = lats
+                    am['longitude'] = lons
 
-                fig = px.scatter_mapbox(
-                    active_map, lat="latitude", lon="longitude",
-                    color="bedomning",
-                    size="dot_size",
-                    color_discrete_map=color_map,
-                    size_max=15, zoom=10,
-                    hover_data={'utgangspris': ':,.0f',
-                                'estimerat_varde': ':,.0f', 'boarea_kvm': ':.0f'},
-                    title="Aktiva annonser — bedömda av ML-modellen",
-                    mapbox_style="carto-darkmatter",
-                )
-                fig.update_layout(
-                    height=600,
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='#e0e0e0'),
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                    no_coords = am['latitude'].isna().sum()
+                    am_ok = am[am['latitude'].notna()].copy()
+
+                    if no_coords > 0:
+                        st.caption(f"⚠️ {no_coords} annonser saknar koordinater och visas ej.")
+
+                    if len(am_ok) == 0:
+                        st.info("Inga annonser med känd position.")
+                        return
+
+                    np.random.seed(42)
+                    am_ok['lat_j'] = am_ok['latitude'] + np.random.uniform(-0.002, 0.002, len(am_ok))
+                    am_ok['lon_j'] = am_ok['longitude'] + np.random.uniform(-0.002, 0.002, len(am_ok))
+
+                    hover = {'utgangspris': ':,.0f', 'boarea_kvm': ':.0f', 'lat_j': False, 'lon_j': False}
+                    if 'estimerat_varde' in am_ok.columns:
+                        hover['estimerat_varde'] = ':,.0f'
+                    if 'deal_score' in am_ok.columns:
+                        hover['deal_score'] = True
+
+                    kw = dict(lat="lat_j", lon="lon_j", size_max=8, zoom=11,
+                              hover_name="omrade", hover_data=hover,
+                              mapbox_style="carto-positron")
+                    if 'deal_kategori' in am_ok.columns:
+                        kw['color'] = 'deal_kategori'
+                        kw['color_discrete_map'] = DEAL_COLORS
+
+                    fig = px.scatter_mapbox(am_ok, **kw)
+                    fig.update_traces(marker=dict(size=8, opacity=0.9))
+                    fig.update_layout(height=650, paper_bgcolor='rgba(0,0,0,0)',
+                                      margin=dict(l=0, r=0, t=0, b=0))
+                    st.plotly_chart(fig, use_container_width=True)
+
+                with typ_tabs[0]:
+                    show_live_map(df_active)
+                with typ_tabs[1]:
+                    show_live_map(df_active[df_active['bostadstyp'] == 'lagenheter'])
+                with typ_tabs[2]:
+                    show_live_map(df_active[df_active['bostadstyp'] == 'villor'])
+                with typ_tabs[3]:
+                    show_live_map(df_active[df_active['bostadstyp'] == 'radhus'])
             else:
-                st.info(
-                    "Kör 05_live_deals.ipynb och 06_geokodning.ipynb för att aktivera kartan.")
-    else:
-        st.info("Kör 06_geokodning.ipynb för att lägga till koordinater.")
+                st.info("Kör daily_update.py och geokodning.")
 
 
 # ============================================================
-# 5. MARKNADSANALYS
+# 4. MARKNADSANALYS
 # ============================================================
 
 elif page == "📈 Marknadsanalys":
     st.markdown("# 📈 Marknadsanalys")
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        ["Pristrender", "Säsongsvariation", "Områdesjämförelse", "Budkrig", "Områdesguide"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Pristrender", "Säsongsvariation", "Områdesjämförelse", "Budkrig", "Områdesguide"])
 
     with tab1:
         if 'sald_datum' in df.columns:
-            typ_filter = st.multiselect(
-                "Bostadstyp", list(TYP_LABELS.values()),
-                default=list(TYP_LABELS.values()), key="trend_typ")
-            df_trend = df.copy()
-            df_trend['bostadstyp'] = df_trend['bostadstyp'].map(TYP_LABELS)
-            filtered = df_trend[df_trend['bostadstyp'].isin(typ_filter)]
-            monthly = filtered.groupby(
-                [pd.Grouper(key='sald_datum', freq='ME'), 'bostadstyp']
-            )['slutpris'].median().reset_index()
-
-            fig = px.line(monthly, x='sald_datum', y='slutpris', color='bostadstyp',
-                          title='Prisutveckling — medianpris per månad (alla områden)',
-                          labels={
-                              'sald_datum': '', 'slutpris': 'Medianpris (kr)', 'bostadstyp': 'Typ'},
-                          color_discrete_map=COLOR_MAP)
-            fig.update_layout(
-                template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig, use_container_width=True)
-
-            # Prishistorik per specifikt område
-            if 'omrade_clean' in df.columns:
-                st.markdown("#### Prishistorik per område")
-                omr_lista = df['omrade_clean'].value_counts(
-                )[lambda x: x >= 15].index.tolist()
-                valt_omrade = st.selectbox(
-                    "Välj område", sorted(omr_lista), key="trend_omrade")
-                omr_monthly = df[df['omrade_clean'] == valt_omrade].groupby(
-                    pd.Grouper(key='sald_datum', freq='QE')
-                )['slutpris'].median().reset_index()
-                fig2 = px.line(omr_monthly, x='sald_datum', y='slutpris',
-                               title=f'Prisutveckling — {valt_omrade}',
-                               labels={'sald_datum': '',
-                                       'slutpris': 'Medianpris (kr)'},
-                               color_discrete_sequence=['#00D4AA'], markers=True)
-                fig2.update_layout(
-                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                st.plotly_chart(fig2, use_container_width=True)
-
-    with tab2:
-        if 'sald_manad' in df.columns:
-            seasonal = df.groupby('sald_manad').agg(
-                medianpris=('slutpris', 'median'),
-                antal=('slutpris', 'count')
-            ).reset_index()
-            months = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun',
-                      'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec']
-            seasonal['manad'] = seasonal['sald_manad'].map(
-                dict(enumerate(months, 1)))
-
-            fig = go.Figure()
-            fig.add_bar(x=seasonal['manad'], y=seasonal['antal'],
-                        name='Antal', marker_color='#00D4AA', opacity=0.5)
-            fig.add_scatter(x=seasonal['manad'], y=seasonal['medianpris'],
-                            name='Medianpris', yaxis='y2', line=dict(color='#ff6b6b', width=3))
-            fig.update_layout(
-                title='Säsongsvariation', template="plotly_dark",
-                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                yaxis=dict(title='Antal'), yaxis2=dict(title='Medianpris', overlaying='y', side='right'),
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-    with tab3:
-        if 'omrade_clean' in df.columns:
-            min_antal = st.slider(
-                "Minsta antal försäljningar", 5, 50, 20, key="area_min")
-            area_stats = df.groupby('omrade_clean').agg(
-                medianpris=('slutpris', 'median'), antal=('slutpris', 'count'),
-                median_kvm=('pris_per_kvm', 'median')
-            ).reset_index()
-            area_stats = area_stats[area_stats['antal'] >= min_antal].sort_values(
-                'medianpris', ascending=True)
-
-            fig = px.bar(area_stats, x='medianpris', y='omrade_clean', orientation='h',
-                         color='median_kvm', color_continuous_scale=["#1a1f2e", "#00D4AA"],
-                         title=f'Medianpris per område (min. {min_antal} försäljningar)',
-                         labels={'medianpris': 'Medianpris (kr)', 'omrade_clean': '', 'median_kvm': 'kr/m²'})
-            fig.update_layout(
-                template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig, use_container_width=True)
-
-    with tab4:
-        if 'prisforandring_pct' in df.columns:
-            col1, col2 = st.columns(2)
-            with col1:
-                df_bk = df.copy()
-                df_bk['bostadstyp'] = df_bk['bostadstyp'].map(TYP_LABELS)
-                bk_typ = df_bk.groupby('bostadstyp').apply(
-                    lambda x: (x['prisforandring_pct'] > 0).mean() * 100
-                ).reset_index(name='andel')
-                fig = px.bar(bk_typ, x='bostadstyp', y='andel', title='Andel budkrig per typ',
-                             labels={'andel': 'Andel (%)', 'bostadstyp': ''},
-                             color='andel', color_continuous_scale=['#1a1f2e', '#ff6b6b'])
-                fig.update_layout(
-                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                st.plotly_chart(fig, use_container_width=True)
-
-            with col2:
-                if 'sasong' in df.columns:
-                    bk_sas = df.groupby('sasong').apply(
-                        lambda x: (x['prisforandring_pct'] > 0).mean() * 100
-                    ).reset_index(name='andel')
-                    fig = px.bar(bk_sas, x='sasong', y='andel', title='Andel budkrig per säsong',
-                                 labels={'andel': 'Andel (%)', 'sasong': ''},
-                                 color='andel', color_continuous_scale=['#1a1f2e', '#00D4AA'])
-                    fig.update_layout(
-                        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig, use_container_width=True)
-
-    with tab5:
-        st.markdown("### 🏆 Områdesguide — jämför och poängsätt")
-        if 'omrade_clean' in df.columns and 'sald_ar' in df.columns:
-            omr_stats = df.groupby('omrade_clean').agg(
-                medianpris=('slutpris', 'median'),
-                antal=('slutpris', 'count'),
-                median_kvm=('pris_per_kvm', 'median'),
-                budkrig=('prisforandring_pct', lambda x: (x > 0).mean() * 100),
-            ).reset_index()
-            # Pristrend: median 2023+ vs 2019-
-            trend_ny = df[df['sald_ar'] >= 2023].groupby('omrade_clean')[
-                'slutpris'].median()
-            trend_gammal = df[df['sald_ar'] <= 2019].groupby('omrade_clean')[
-                'slutpris'].median()
-            omr_stats['pristrend'] = (
-                (trend_ny / trend_gammal - 1) * 100).reindex(omr_stats['omrade_clean'].values).values
-            omr_stats = omr_stats[omr_stats['antal']
-                                  >= 20].dropna(subset=['pristrend'])
-
-            # Poängsätt 0-10 per dimension
-            def poang(serie, hog_ar_bra=True):
-                mn, mx = serie.min(), serie.max()
-                if mx == mn:
-                    return pd.Series([5.0] * len(serie), index=serie.index)
-                norm = (serie - mn) / (mx - mn) * 10
-                return norm if hog_ar_bra else 10 - norm
-
-            omr_stats['p_pris'] = poang(
-                omr_stats['medianpris'], hog_ar_bra=False).values
-            omr_stats['p_trend'] = poang(
-                omr_stats['pristrend'], hog_ar_bra=True).values
-            omr_stats['p_budkrig'] = poang(
-                omr_stats['budkrig'], hog_ar_bra=True).values
-            omr_stats['p_aktivitet'] = poang(
-                omr_stats['antal'], hog_ar_bra=True).values
-            omr_stats['totalscore'] = (
-                omr_stats[['p_pris', 'p_trend', 'p_budkrig',
-                           'p_aktivitet']].mean(axis=1)
-            ).round(1)
-
-            col1, col2 = st.columns([1, 2])
-            with col1:
-                top_n = st.slider("Visa topp N områden",
-                                  5, 40, 20, key="score_n")
-                visa_omr = omr_stats.nlargest(top_n, 'totalscore')[
-                    ['omrade_clean', 'totalscore',
-                        'medianpris', 'pristrend', 'budkrig']
-                ].rename(columns={
-                    'omrade_clean': 'Område', 'totalscore': 'Score',
-                    'medianpris': 'Medianpris', 'pristrend': 'Trend %', 'budkrig': 'Budkrig %'
-                })
-                st.dataframe(visa_omr, use_container_width=True, hide_index=True,
-                             column_config={
-                                 "Medianpris": st.column_config.NumberColumn(format="%d kr"),
-                                 "Trend %": st.column_config.NumberColumn(format="%.0f%%"),
-                                 "Budkrig %": st.column_config.NumberColumn(format="%.0f%%"),
-                             })
-
-            with col2:
-                # Radarchart för valt område
-                valt_score_omr = st.selectbox(
-                    "Radardiagram för område",
-                    omr_stats.nlargest(top_n, 'totalscore')[
-                        'omrade_clean'].tolist(),
-                    key="score_omr")
-                row = omr_stats[omr_stats['omrade_clean']
-                                == valt_score_omr].iloc[0]
-                kategorier = ['Prisvärdhet', 'Pristrend',
-                              'Budkrigsfrekvens', 'Marknadsaktivitet']
-                varden = [row['p_pris'], row['p_trend'],
-                          row['p_budkrig'], row['p_aktivitet']]
-                fig = go.Figure(go.Scatterpolar(
-                    r=varden + [varden[0]],
-                    theta=kategorier + [kategorier[0]],
-                    fill='toself', fillcolor='rgba(0,212,170,0.2)',
-                    line=dict(color='#00D4AA', width=2),
-                    name=valt_score_omr,
-                ))
-                fig.update_layout(
-                    polar=dict(radialaxis=dict(visible=True, range=[0, 10],
-                                               gridcolor='#333', linecolor='#333'),
-                               angularaxis=dict(gridcolor='#333', linecolor='#555')),
-                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
-                    title=f"Scorecard — {valt_score_omr}",
-                    height=400, showlegend=False,
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-
-# ============================================================
-# 6. SCENARIOANALYS
-# ============================================================
-
-elif page == "🔮 Scenarioanalys":
-    st.markdown("# 🔮 Scenarioanalys — Prisprognos")
-    st.markdown(
-        "Hur kan bostadspriserna i Örebro utvecklas de kommande 5-10 åren?")
-
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-
-    # Välj bostadens nuvarande värde
-    col1, col2 = st.columns(2)
-    with col1:
-        nuvarande_pris = st.number_input("Nuvarande bostadens värde (kr)",
-                                         value=2500000, step=100000, format="%d")
-    with col2:
-        ar_framat = st.slider("Antal år framåt", 1, 15, 10)
-
-    # Beräkna historiska trender från datan
-    if 'sald_ar' in df.columns:
-        yearly = df.groupby('sald_ar')['slutpris'].median().reset_index()
-        yearly = yearly[yearly['sald_ar'] >= 2015]  # Senaste 10 åren
-
-        if len(yearly) > 2:
-            # Beräkna årlig förändring
-            yearly['forandring'] = yearly['slutpris'].pct_change()
-            avg_growth = yearly['forandring'].median()
-            boom_growth = yearly['forandring'].quantile(0.8)
-            bust_growth = yearly['forandring'].quantile(0.2)
-    else:
-        avg_growth = 0.03
-        boom_growth = 0.07
-        bust_growth = -0.03
-
-    # Tre scenarier
-    scenarios = {
-        '📈 Snabb tillväxt': {
-            'rate': max(boom_growth, 0.05),
-            'color': '#00D4AA',
-            'desc': 'Stark ekonomi, låga räntor, hög efterfrågan. Baserat på bästa åren 2019-2021.'
-        },
-        '➡️ Stabil marknad': {
-            'rate': max(avg_growth, 0.02),
-            'color': '#667eea',
-            'desc': 'Normal utveckling, historisk median. Balanserad marknad.'
-        },
-        '📉 Recession': {
-            'rate': min(bust_growth, -0.02),
-            'color': '#ff6b6b',
-            'desc': 'Höga räntor, ekonomisk nedgång. Baserat på 2022-2023 (räntechocken).'
-        }
-    }
-
-    # Beräkna framtida priser
-    years = list(range(2026, 2026 + ar_framat + 1))
-
-    fig = go.Figure()
-
-    result_table = []
-
-    for name, scenario in scenarios.items():
-        prices = [nuvarande_pris]
-        for y in range(ar_framat):
-            # Recession: första 2 åren ner, sen återhämtning
-            if 'Recession' in name and y < 2:
-                rate = scenario['rate']
-            elif 'Recession' in name:
-                rate = abs(scenario['rate']) * 0.5  # Långsam återhämtning
-            else:
-                rate = scenario['rate']
-            prices.append(prices[-1] * (1 + rate))
-
-        fig.add_trace(go.Scatter(
-            x=years, y=prices, name=name.split(' ', 1)[1],
-            line=dict(color=scenario['color'], width=3),
-            fill='tonexty' if 'Recession' not in name else None,
-        ))
-
-        result_table.append({
-            'Scenario': name,
-            f'Pris {years[-1]}': f"{prices[-1]:,.0f} kr",
-            'Förändring': f"{((prices[-1]/nuvarande_pris)-1)*100:+.0f}%",
-            'Årlig tillväxt': f"{scenario['rate']*100:+.1f}%/år",
-        })
-
-    fig.update_layout(
-        title=f"Prisprognos {years[0]}–{years[-1]}",
-        xaxis_title="År",
-        yaxis_title="Estimerat värde (kr)",
-        template="plotly_dark",
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        height=500,
-        hovermode='x unified',
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Resultattabell
-    st.markdown("### Scenarioresultat")
-    result_df = pd.DataFrame(result_table)
-    st.dataframe(result_df, use_container_width=True, hide_index=True)
-
-    # Antaganden
-    with st.expander("📋 Antaganden bakom scenarierna"):
-        for name, scenario in scenarios.items():
-            st.markdown(f"**{name}** ({scenario['rate']*100:+.1f}%/år)")
-            st.markdown(f"_{scenario['desc']}_")
-            st.markdown("")
-        st.markdown("""
-        **Viktigt:** Dessa prognoser är baserade på historiska trender i Örebro kommun
-        och ska inte ses som finansiell rådgivning. Faktiska prisförändringar beror på
-        räntor, ekonomisk politik, befolkningsutveckling och andra faktorer.
-        """)
-
-
-# ============================================================
-# 7. KÖPKALKYL
-# ============================================================
-
-elif page == "🏦 Köpkalkyl":
-    st.markdown("# 🏦 Köpkalkyl")
-    st.markdown(
-        "Beräkna din totala köpkostnad och vad bostaden kostar per månad")
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-
-    tab1, tab2 = st.tabs(["💳 Bolånekalkylator", "🧾 Köpkostnadskalkyl"])
-
-    with tab1:
-        st.markdown("#### Vad kostar bolånet per månad?")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            kop_pris = st.number_input(
-                "Köpeskilling (kr)", value=2500000, step=50000, format="%d")
-            kontant_pct = st.slider("Kontantinsats (%)", 10, 50, 15)
-        with col2:
-            ranta = st.slider("Bolåneränta (%)", 1.0, 10.0, 4.5, step=0.1)
-            amort_pct = st.slider("Amortering (%/år)", 0.0, 3.0, 1.0, step=0.1)
-        with col3:
-            lan_tid = st.slider("Löptid (år)", 5, 50, 30)
-            avgift_ko = st.number_input(
-                "Månadsavgift (kr)", value=3500, step=100, format="%d")
-
-        kontant = int(kop_pris * kontant_pct / 100)
-        lan = kop_pris - kontant
-        r = ranta / 100 / 12
-        n = lan_tid * 12
-        if r > 0:
-            manads_ranta = lan * r * (1 + r)**n / ((1 + r)**n - 1)
-        else:
-            manads_ranta = lan / n
-        manads_amort = lan * amort_pct / 100 / 12
-        total_manad = manads_ranta + avgift_ko
-
-        st.markdown('<div class="custom-divider"></div>',
-                    unsafe_allow_html=True)
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Kontantinsats", f"{kontant:,} kr")
-        c2.metric("Lånebelopp", f"{lan:,} kr")
-        c3.metric("Månadsbetalning (ränta)", f"{int(manads_ranta):,} kr")
-        c4.metric("Total månadskostnad", f"{int(total_manad):,} kr")
-
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-        with col1:
-            total_betalt = manads_ranta * n
-            rante_kostnad = total_betalt - lan
-            st.metric("Total räntekostnad (hela lånet)",
-                      f"{int(rante_kostnad):,} kr")
-            st.metric("Totalt betalt", f"{int(total_betalt + kontant):,} kr")
-        with col2:
-            # Amorteringsplan — saldo per år
-            saldo = [lan]
-            for _ in range(lan_tid):
-                saldo.append(
-                    max(0, saldo[-1] * (1 + ranta/100) - manads_ranta * 12))
-            fig = px.area(
-                x=list(range(2026, 2026 + lan_tid + 1)), y=saldo,
-                title="Lånesaldo över tid",
-                labels={"x": "År", "y": "Kvarvarande lån (kr)"},
-                color_discrete_sequence=['#667eea'],
-            )
+            tf = st.multiselect("Typ", list(TYP_LABELS.values()),
+                                default=list(TYP_LABELS.values()), key="t_typ")
+            dft = df.copy()
+            dft['bostadstyp'] = dft['bostadstyp'].map(TYP_LABELS)
+            dft = dft[dft['bostadstyp'].isin(tf)]
+            mon = dft.groupby([pd.Grouper(key='sald_datum', freq='ME'), 'bostadstyp']
+                              )['slutpris'].median().reset_index()
+            fig = px.line(mon, x='sald_datum', y='slutpris', color='bostadstyp',
+                          labels={'sald_datum': '', 'slutpris': 'Medianpris (kr)', 'bostadstyp': 'Typ'},
+                          color_discrete_map=COLOR_MAP, markers=True)
             fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
                               plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig, use_container_width=True)
 
-    with tab2:
-        st.markdown("#### Totala köpkostnader utöver köpeskillingen")
-        col1, col2 = st.columns(2)
-        with col1:
-            kop2 = st.number_input("Köpeskilling (kr)", value=2500000, step=50000,
-                                   format="%d", key="kop2")
-            lan2 = st.number_input("Nytt bolån (kr)", value=2000000, step=50000,
-                                   format="%d", key="lan2")
-            befintligt_pantbrev = st.number_input("Befintliga pantbrev (kr)", value=0,
-                                                  step=100000, format="%d")
-            akop = st.selectbox("Köpare", ["Privatperson", "Juridisk person"])
-        with col2:
-            # Beräkningar
-            stampelskatt_pct = 0.015 if akop == "Privatperson" else 0.0425
-            stampelskatt = round(kop2 * stampelskatt_pct /
-                                 1000 + 0.5) * 1000  # avrundat uppåt
-            lagfart = 825
-            nytt_pantbrev = max(0, lan2 - befintligt_pantbrev)
-            pantbrev_kostnad = int(nytt_pantbrev * 0.02) + \
-                (375 if nytt_pantbrev > 0 else 0)
-            maklararv = int(kop2 * 0.025)
-            total_extra = stampelskatt + lagfart + pantbrev_kostnad
+            if 'omrade_clean' in df.columns:
+                st.markdown("#### Per område")
+                ol = df['omrade_clean'].value_counts()[lambda x: x >= 15].index.tolist()
+                vo = st.selectbox("Område", sorted(ol), key="t_omr")
+                oq = df[df['omrade_clean'] == vo].groupby(
+                    pd.Grouper(key='sald_datum', freq='QE'))['slutpris'].median().reset_index()
+                fig2 = px.line(oq, x='sald_datum', y='slutpris', markers=True,
+                               color_discrete_sequence=['#10b981'],
+                               labels={'sald_datum': '', 'slutpris': 'Medianpris'})
+                fig2.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
+                                   plot_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig2, use_container_width=True)
 
-            st.markdown("##### Kostnadsspecifikation")
-            poster = {
-                "Stämpelskatt": stampelskatt,
-                "Lagfartsavgift": lagfart,
-                "Pantbrev (2% av nytt lån)": pantbrev_kostnad,
-            }
-            for namn, belopp in poster.items():
-                st.markdown(f"**{namn}:** {belopp:,} kr")
-            st.markdown(
-                f"*Mäklararvode (ca 2.5%, betalas av säljare):* ~{maklararv:,} kr*")
-            st.markdown(f"### Totalt extra: **{total_extra:,} kr**")
-            st.markdown(f"### Total kostnad: **{kop2 + total_extra:,} kr**")
-            st.caption(
-                "*Mäklararvodet betalas normalt av säljaren och ingår ej i totalen.")
+    with tab2:
+        if 'sald_manad' in df.columns:
+            sea = df.groupby('sald_manad').agg(
+                medianpris=('slutpris', 'median'), antal=('slutpris', 'count')).reset_index()
+            months = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec']
+            sea['m'] = sea['sald_manad'].map(dict(enumerate(months, 1)))
+            fig = go.Figure()
+            fig.add_bar(x=sea['m'], y=sea['antal'], name='Antal', marker_color='#10b981', opacity=0.4)
+            fig.add_scatter(x=sea['m'], y=sea['medianpris'], name='Medianpris',
+                            yaxis='y2', line=dict(color='#ef4444', width=3))
+            fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
+                              plot_bgcolor='rgba(0,0,0,0)',
+                              yaxis=dict(title='Antal'), yaxis2=dict(title='Medianpris', overlaying='y', side='right'))
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab3:
+        if 'omrade_clean' in df.columns:
+            mn = st.slider("Min antal", 5, 50, 20, key="a_mn")
+            astats = df.groupby('omrade_clean').agg(
+                medianpris=('slutpris', 'median'), antal=('slutpris', 'count'),
+                kvm=('pris_per_kvm', 'median')).reset_index()
+            astats = astats[astats['antal'] >= mn].sort_values('medianpris')
+            fig = px.bar(astats, x='medianpris', y='omrade_clean', orientation='h',
+                         color='kvm', color_continuous_scale=["#1e293b", "#10b981"],
+                         labels={'medianpris': 'Medianpris (kr)', 'omrade_clean': '', 'kvm': 'kr/m²'})
+            fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
+                              plot_bgcolor='rgba(0,0,0,0)')
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab4:
+        st.markdown("### ⚔️ Budkrig")
+        st.markdown("Budkrig = slutpriset överstiger utgångspriset. Visar hur vanligt det är per bostadstyp och hur marknaden rört sig över tid.")
+        if 'budkrig' in df.columns and 'prisforandring_pct' in df.columns:
+
+            # KPI per bostadstyp
+            typ_stats = []
+            for bk_typ, bk_label in [('lagenheter', 'Lägenheter'), ('villor', 'Villor'), ('radhus', 'Radhus')]:
+                sub = df[df['bostadstyp'] == bk_typ]
+                if len(sub) > 0:
+                    rate = sub['budkrig'].mean() * 100
+                    avg_ov = sub[sub['budkrig'] == 1]['prisforandring_pct'].mean()
+                    typ_stats.append({'typ': bk_label, 'rate': rate, 'avg_ov': avg_ov, 'antal': len(sub)})
+
+            col1, col2, col3 = st.columns(3)
+            colors_typ = {'Lägenheter': '#10b981', 'Villor': '#6366f1', 'Radhus': '#f43f5e'}
+            for col_el, ts in zip([col1, col2, col3], typ_stats):
+                c = colors_typ.get(ts['typ'], '#9ca3af')
+                col_el.markdown(
+                    f"<div style='background:#1f2937;border:1px solid #374151;border-radius:12px;"
+                    f"padding:16px;border-top:3px solid {c};'>"
+                    f"<div style='color:#9ca3af;font-size:12px;'>{ts['typ']}</div>"
+                    f"<div style='font-size:28px;font-weight:700;color:{c};'>{ts['rate']:.0f}%</div>"
+                    f"<div style='color:#9ca3af;font-size:12px;'>har budkrig</div>"
+                    f"<div style='color:#6b7280;font-size:11px;margin-top:6px;'>"
+                    f"Snitt +{ts['avg_ov']:.1f}% vid budkrig</div>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+
+            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+            # En enkel linjegraf: budkrig-% per år, per bostadstyp
+            if 'sald_ar' in df.columns:
+                bk_ar_typ = df.groupby(['sald_ar', 'bostadstyp']).agg(
+                    budkrig_pct=('budkrig', lambda x: x.mean() * 100)
+                ).reset_index()
+                bk_ar_typ['Typ'] = bk_ar_typ['bostadstyp'].map(TYP_LABELS)
+                fig_bk = px.line(
+                    bk_ar_typ, x='sald_ar', y='budkrig_pct', color='Typ',
+                    color_discrete_map=colors_typ, markers=True,
+                    labels={'sald_ar': 'År', 'budkrig_pct': 'Andel budkrig (%)'},
+                )
+                fig_bk.update_layout(
+                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)', height=340, hovermode='x unified',
+                    title="Hur vanligt är budkrig per år?"
+                )
+                st.plotly_chart(fig_bk, use_container_width=True)
+
+            # Enkel tolkning
+            if typ_stats:
+                max_typ = max(typ_stats, key=lambda x: x['rate'])
+                min_typ = min(typ_stats, key=lambda x: x['rate'])
+                st.info(
+                    f"**{max_typ['typ']}** har flest budkrig ({max_typ['rate']:.0f}%) — "
+                    f"konkurrensen är hårdast här. **{min_typ['typ']}** har minst budkrig "
+                    f"({min_typ['rate']:.0f}%) — mer förhandlingsutrymme."
+                )
+        else:
+            st.info("Budkrig-data saknas i datasetet.")
+
+    with tab5:
+        st.markdown("### 🗺️ Områdesguide — jämför alla områden")
+        if 'omrade_clean' in df.columns:
+            mn2 = st.slider("Min antal försäljningar", 10, 50, 15, key="og_mn")
+            og = df.groupby('omrade_clean').agg(
+                medianpris=('slutpris', 'median'),
+                kvm_pris=('pris_per_kvm', 'median'),
+                antal=('slutpris', 'count'),
+                budkrig_pct=('budkrig', lambda x: x.mean() * 100 if 'budkrig' in df.columns else 0),
+                median_diff=('prisforandring_pct', 'median'),
+                senaste_ar=('sald_ar', 'max'),
+            ).reset_index()
+            og = og[og['antal'] >= mn2].sort_values('medianpris', ascending=False).reset_index(drop=True)
+
+            # Prisindex: normalisera medianpris mot genomsnittet
+            snitt = og['medianpris'].mean()
+            og['prisindex'] = (og['medianpris'] / snitt * 100).round(1)
+
+            # Trend: jämför sista 2 år mot de föregående 2
+            if 'sald_ar' in df.columns:
+                max_ar = df['sald_ar'].max()
+                recent = df[df['sald_ar'] >= max_ar - 1].groupby('omrade_clean')['slutpris'].median()
+                older = df[(df['sald_ar'] >= max_ar - 3) & (df['sald_ar'] < max_ar - 1)].groupby('omrade_clean')['slutpris'].median()
+                trend = ((recent / older - 1) * 100).round(1).rename('trend_2ar')
+                og = og.merge(trend, left_on='omrade_clean', right_index=True, how='left')
+            else:
+                og['trend_2ar'] = None
+
+            tbl_cols = ['omrade_clean', 'medianpris', 'kvm_pris', 'antal',
+                        'budkrig_pct', 'median_diff', 'prisindex', 'trend_2ar']
+            tbl_cols = [c for c in tbl_cols if c in og.columns]
+            st.dataframe(og[tbl_cols], use_container_width=True, hide_index=True,
+                         height=450,
+                         column_config={
+                             'omrade_clean': st.column_config.TextColumn('Område'),
+                             'medianpris': st.column_config.NumberColumn('Medianpris', format='%d kr'),
+                             'kvm_pris': st.column_config.NumberColumn('kr/m²', format='%d kr'),
+                             'antal': st.column_config.NumberColumn('Antal sålda', format='%d'),
+                             'budkrig_pct': st.column_config.NumberColumn('Budkrig %', format='%.1f%%'),
+                             'median_diff': st.column_config.NumberColumn('Median prisskillnad', format='%.1f%%'),
+                             'prisindex': st.column_config.ProgressColumn('Prisindex', min_value=0, max_value=200, format='%.0f'),
+                             'trend_2ar': st.column_config.NumberColumn('Trend 2 år', format='%.1f%%'),
+                         })
+
+            # Scatter: kvm-pris vs budkrig-andel
+            st.markdown("#### Presnivå vs budkrig-andel per område")
+            fig_sc = px.scatter(og, x='kvm_pris', y='budkrig_pct', size='antal',
+                                text='omrade_clean', color='trend_2ar',
+                                color_continuous_scale=["#ef4444", "#6b7280", "#10b981"],
+                                labels={'kvm_pris': 'kr/m²', 'budkrig_pct': 'Andel budkrig (%)',
+                                        'trend_2ar': 'Trend 2 år (%)'},
+                                hover_data={'medianpris': ':,.0f'})
+            fig_sc.update_traces(textposition='top center', textfont_size=9)
+            fig_sc.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
+                                 plot_bgcolor='rgba(0,0,0,0)', height=500)
+            st.plotly_chart(fig_sc, use_container_width=True)
+        else:
+            st.info("Områdesdata saknas.")
 
 
 # ============================================================
-# 8. INVESTERINGSKALKYL
+# 5. SCENARIOANALYS
+# ============================================================
+
+elif page == "🔮 Scenarioanalys":
+    st.markdown("# 🔮 Prisprognos")
+    st.markdown("Tre realistiska scenarier baserade på Örebros historiska prisutveckling 2013–2026.")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        pris_nu = st.number_input("Nuvarande värde (kr)", value=2500000, step=100000, format="%d")
+    with c2:
+        ar = st.slider("År framåt", 1, 15, 10)
+
+    if 'sald_ar' in df.columns:
+        yrl = df.groupby('sald_ar')['slutpris'].median().reset_index()
+        yrl = yrl[yrl['sald_ar'] >= 2015]
+        if len(yrl) > 2:
+            yrl['ch'] = yrl['slutpris'].pct_change()
+            ag = float(yrl['ch'].median())
+            bg = float(yrl['ch'].quantile(0.8))
+            sg = float(yrl['ch'].quantile(0.2))
+        else:
+            ag, bg, sg = 0.03, 0.07, -0.03
+    else:
+        ag, bg, sg = 0.03, 0.07, -0.03
+
+    bg = max(bg, 0.05)
+    ag = max(ag, 0.02)
+    sg = min(sg, -0.01)
+
+    scenarios = {
+        '🟢 Optimistiskt — Stark marknad': {
+            'rate': bg, 'color': '#10b981',
+            'forklaring': (
+                f"Tillväxt på **{bg*100:.1f}% per år** — i linje med Örebros starkaste perioder. "
+                "Förutsätter låg räntenivå, stark arbetsmarknad och fortsatt inflyttning till Örebro. "
+                "Sannolikt om Riksbanken sänker räntan ytterligare och bostadsbyggandet bromsar."
+            ),
+        },
+        '🔵 Basscenario — Marknaden stabiliseras': {
+            'rate': ag, 'color': '#6366f1',
+            'forklaring': (
+                f"Tillväxt på **{ag*100:.1f}% per år** — median för de senaste 10 åren. "
+                "Förutsätter att räntan håller sig på nuvarande nivå och att utbudet är balanserat. "
+                "Det historiskt vanligaste utfallet för en medelstor svensk stad."
+            ),
+        },
+        '🔴 Pessimistiskt — Prisjustering': {
+            'rate': sg, 'color': '#ef4444',
+            'forklaring': (
+                f"Prisförändring på **{sg*100:.1f}% per år** — bottenkvartal de senaste 10 åren. "
+                "Förutsätter höga räntor, ökad arbetslöshet eller kraftigt ökat utbud. "
+                "Modellen visar att nedgångar historiskt tenderar att plana ut efter 2–3 år."
+            ),
+        },
+    }
+
+    yrs = list(range(2026, 2026 + ar + 1))
+    fig = go.Figure()
+    for name, s in scenarios.items():
+        prices = [pris_nu]
+        for y in range(ar):
+            rate = s['rate'] if '🔴' not in name or y < 2 else abs(s['rate']) * 0.4
+            prices.append(prices[-1] * (1 + rate))
+        fig.add_trace(go.Scatter(
+            x=yrs, y=prices, name=name.split(' — ')[1],
+            line=dict(color=s['color'], width=3),
+            hovertemplate='%{y:,.0f} kr<extra>' + name.split(' — ')[1] + '</extra>'
+        ))
+
+    fig.add_hline(y=pris_nu, line_color='#9ca3af', line_dash='dot',
+                  annotation_text="Nuvarande värde", annotation_position="bottom right")
+    fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
+                      plot_bgcolor='rgba(0,0,0,0)', height=420, hovermode='x unified',
+                      yaxis_title="Värde (kr)", legend=dict(x=0.01, y=0.99))
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Slutvärden
+    st.markdown("#### Prognosticerat värde om " + str(ar) + " år")
+    res_cols = st.columns(3)
+    for col_el, (name, s) in zip(res_cols, scenarios.items()):
+        prices = [pris_nu]
+        for y in range(ar):
+            rate = s['rate'] if '🔴' not in name or y < 2 else abs(s['rate']) * 0.4
+            prices.append(prices[-1] * (1 + rate))
+        slutval = prices[-1]
+        diff = slutval - pris_nu
+        col_el.markdown(f"""
+        <div class="deal-card" style="border-left:3px solid {s['color']};text-align:center;">
+            <div style="font-size:13px;color:#9ca3af;">{name.split(' — ')[0]}</div>
+            <div style="font-size:11px;color:#6b7280;margin-bottom:8px;">{name.split(' — ')[1]}</div>
+            <div style="font-size:22px;font-weight:700;color:{s['color']};">{int(slutval):,} kr</div>
+            <div style="font-size:12px;color:#9ca3af;">{'+'if diff>=0 else ''}{int(diff):,} kr</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown("#### Varför tänker vi så?")
+    for name, s in scenarios.items():
+        with st.expander(name):
+            st.markdown(s['forklaring'])
+
+    st.caption("⚠️ Baserat på historiska trender i Örebro 2013–2026. Inte finansiell rådgivning.")
+
+
+# ============================================================
+# 6. KÖPKALKYL
+# ============================================================
+
+elif page == "🏦 Köpkalkyl":
+    st.markdown("# 🏦 Köpkalkyl")
+    st.markdown("Räkna ut vad bostaden faktiskt kostar — månadsvis, vid köp och över tid.")
+
+    # ── Indata ──────────────────────────────────────────────
+    st.markdown("#### Bostad & finansiering")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        kp  = st.number_input("Köpeskilling (kr)", value=2_500_000, step=50_000, format="%d", key="kp")
+        ki  = st.slider("Kontantinsats (%)", 10, 50, 15, key="ki",
+                        help="Minst 15% krävs för bolån i Sverige")
+        lt  = st.slider("Löptid (år)", 10, 50, 30, key="lt")
+    with c2:
+        ra  = st.slider("Bolåneränta (%)", 1.0, 10.0, 4.5, step=0.1, key="ra")
+        am  = st.slider("Amortering (%/år av lån)", 0.0, 3.0, 1.0, step=0.5, key="am",
+                        help="Lagkrav: ≥1% om lån >50% av värdet, ≥2% om lån >70%")
+        av  = st.number_input("Månadsavgift/drift (kr)", value=3_500, step=100, format="%d", key="av")
+    with c3:
+        hush = st.number_input("Hushållsinkomst brutto/mån (kr)", value=60_000, step=1_000,
+                               format="%d", key="hush",
+                               help="Används för kvar-att-leva-på beräkning")
+        ovr  = st.number_input("Övriga fasta kostnader/mån (kr)", value=15_000, step=500,
+                               format="%d", key="ovr",
+                               help="Mat, bil, försäkringar, etc.")
+        skatt_pct = st.slider("Kommunalskatt (%)", 28.0, 35.0, 32.0, step=0.5, key="skatt")
+
+    # ── Beräkningar ─────────────────────────────────────────
+    kontant      = int(kp * ki / 100)
+    lan          = kp - kontant
+    r_man        = ra / 100 / 12
+    n_man        = lt * 12
+    ranta_man    = lan * r_man * (1 + r_man)**n_man / ((1 + r_man)**n_man - 1) if r_man > 0 else lan / n_man
+    amortering_man = lan * am / 100 / 12
+    ranta_ar     = ranta_man * 12
+
+    # Ränteavdrag 30% (skattereduktion)
+    ranteavdrag_man = ranta_man * 0.30
+
+    # Transaktionskostnader vid köp
+    stampelskatt = kp * 0.015
+    pantbrev     = lan * 0.02
+    pantbrev_exp = 825
+    tot_trans    = stampelskatt + pantbrev + pantbrev_exp
+
+    # Nettolön (schablonmässig)
+    netto_lon = hush * (1 - skatt_pct / 100)
+
+    # Boendekostnad per månad (efter ränteavdrag)
+    boende_man   = ranta_man - ranteavdrag_man + amortering_man + av
+    kvar_att_leva = netto_lon - boende_man - ovr
+
+    # Belåningsgrad
+    belaning_pct = lan / kp * 100
+
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+    # ── Nyckeltal ────────────────────────────────────────────
+    st.markdown("#### Nyckeltal")
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Kontantinsats", f"{kontant:,} kr")
+    m2.metric("Lån", f"{lan:,} kr",
+              delta=f"{belaning_pct:.0f}% belåning",
+              delta_color="inverse" if belaning_pct > 70 else "normal")
+    m3.metric("Ränta/mån", f"{int(ranta_man):,} kr",
+              delta=f"−{int(ranteavdrag_man):,} kr avdrag",
+              delta_color="normal")
+    m4.metric("Total boendekostnad/mån", f"{int(boende_man):,} kr")
+    m5.metric("Kvar att leva på", f"{int(kvar_att_leva):,} kr/mån",
+              delta="OK" if kvar_att_leva > 10_000 else "Tight",
+              delta_color="normal" if kvar_att_leva > 10_000 else "inverse")
+
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+    # ── Engångskostnader ────────────────────────────────────
+    with st.expander("📋 Vad kostar det att köpa? (engångsutgifter)", expanded=True):
+        ec1, ec2, ec3, ec4 = st.columns(4)
+        ec1.metric("Kontantinsats", f"{kontant:,} kr")
+        ec2.metric("Stämpelskatt (1,5%)", f"{int(stampelskatt):,} kr",
+                   help="Lagfartsstämpel till Lantmäteriet")
+        ec3.metric("Pantbrev (2% av lån)", f"{int(pantbrev + pantbrev_exp):,} kr",
+                   help="Kostnad för nya pantbrevsinteckningar")
+        ec4.metric("Totalt kapital vid köp", f"{int(kontant + tot_trans):,} kr",
+                   help="Summa du behöver ha likvid på kontot")
+        st.info(f"💡 Utöver köpeskillingen behöver du **{int(tot_trans):,} kr** i engångskostnader "
+                f"({tot_trans/kp*100:.1f}% av köpeskillingen).")
+
+    # ── Månadsbudget ────────────────────────────────────────
+    st.markdown("#### Månadsbudget")
+    mb1, mb2 = st.columns(2)
+    with mb1:
+        st.markdown("**Inkomst**")
+        rows_in = [
+            ("Bruttolön/mån", f"{hush:,} kr"),
+            ("− Kommunalskatt", f"−{int(hush * skatt_pct/100):,} kr"),
+            ("= Nettolön/mån", f"**{int(netto_lon):,} kr**"),
+        ]
+        for label, val in rows_in:
+            st.markdown(f"<div style='display:flex;justify-content:space-between;padding:4px 0;"
+                        f"border-bottom:1px solid #1f2937;'><span style='color:#9ca3af;'>{label}</span>"
+                        f"<span>{val}</span></div>", unsafe_allow_html=True)
+    with mb2:
+        st.markdown("**Boendekostnad**")
+        rows_bo = [
+            ("Ränta", f"{int(ranta_man):,} kr"),
+            ("− Ränteavdrag (30%)", f"−{int(ranteavdrag_man):,} kr"),
+            ("Amortering", f"{int(amortering_man):,} kr"),
+            ("Avgift/drift", f"{int(av):,} kr"),
+            ("= Boende totalt/mån", f"**{int(boende_man):,} kr**"),
+        ]
+        for label, val in rows_bo:
+            st.markdown(f"<div style='display:flex;justify-content:space-between;padding:4px 0;"
+                        f"border-bottom:1px solid #1f2937;'><span style='color:#9ca3af;'>{label}</span>"
+                        f"<span>{val}</span></div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+    # ── Grafer ──────────────────────────────────────────────
+    g1, g2 = st.columns(2)
+
+    with g1:
+        st.markdown("##### Amorteringsplan")
+        saldo = [lan]
+        ranta_kum = [0]
+        for y in range(lt):
+            ny_saldo = max(0, saldo[-1] - amortering_man * 12)
+            saldo.append(ny_saldo)
+            ranta_kum.append(ranta_kum[-1] + saldo[-2] * ra / 100)
+        yrs = list(range(2026, 2026 + lt + 1))
+        fig_am = go.Figure()
+        fig_am.add_scatter(x=yrs, y=saldo, name="Kvarvarande lån",
+                           fill='tozeroy', line=dict(color='#6366f1', width=2))
+        fig_am.add_scatter(x=yrs, y=ranta_kum, name="Ackumulerad ränta",
+                           line=dict(color='#ef4444', width=2, dash='dot'))
+        fig_am.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
+                             plot_bgcolor='rgba(0,0,0,0)', height=300,
+                             yaxis_title="kr", hovermode='x unified',
+                             legend=dict(x=0, y=1))
+        st.plotly_chart(fig_am, use_container_width=True)
+
+    with g2:
+        st.markdown("##### Månadsbudget — fördelning")
+        labels = ["Ränta (netto)", "Amortering", "Avgift/drift", "Övriga kostnader", "Kvar att leva"]
+        values = [
+            max(0, int(ranta_man - ranteavdrag_man)),
+            int(amortering_man),
+            int(av),
+            int(ovr),
+            max(0, int(kvar_att_leva)),
+        ]
+        colors = ['#6366f1', '#10b981', '#f59e0b', '#9ca3af', '#1f2937']
+        fig_pie = go.Figure(go.Pie(
+            labels=labels, values=values,
+            hole=0.5,
+            marker=dict(colors=colors),
+            textinfo='label+percent',
+            textfont_size=11,
+        ))
+        fig_pie.add_annotation(text=f"{int(netto_lon):,}<br>kr/mån",
+                               x=0.5, y=0.5, showarrow=False,
+                               font=dict(size=13, color='#f9fafb'))
+        fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', height=300,
+                              showlegend=False, margin=dict(t=20, b=20))
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    # ── Känslighetsanalys ───────────────────────────────────
+    st.markdown("#### Vad händer om räntan ändras?")
+    rantor = [r/10 for r in range(10, 101, 5)]
+    boende_per_ranta = []
+    for r_test in rantor:
+        rm = lan * (r_test/100/12) * (1 + r_test/100/12)**n_man / ((1 + r_test/100/12)**n_man - 1)
+        boende_per_ranta.append(int(rm - rm*0.30 + amortering_man + av))
+    fig_sens = go.Figure()
+    fig_sens.add_scatter(x=rantor, y=boende_per_ranta, mode='lines+markers',
+                         line=dict(color='#10b981', width=2),
+                         hovertemplate='%{x:.1f}% ränta → %{y:,} kr/mån<extra></extra>')
+    fig_sens.add_vline(x=ra, line_color='#fbbf24', line_dash='dash',
+                       annotation_text=f"Din ränta {ra}%", annotation_position="top right")
+    fig_sens.add_hline(y=int(netto_lon * 0.35), line_color='#ef4444', line_dash='dot',
+                       annotation_text="35% av nettolön (rekommenderat tak)",
+                       annotation_position="bottom right")
+    fig_sens.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
+                           plot_bgcolor='rgba(0,0,0,0)', height=280,
+                           xaxis_title="Ränta (%)", yaxis_title="Boendekostnad/mån (kr)")
+    st.plotly_chart(fig_sens, use_container_width=True)
+
+    st.caption("⚠️ Ränteavdrag är 30% upp till 100 000 kr ränta/år, 21% däröver. Beräkning förenklad.")
+
+
+# ============================================================
+# 7. INVESTERINGSKALKYL
 # ============================================================
 
 elif page == "💼 Investeringskalkyl":
     st.markdown("# 💼 Investeringskalkyl")
-    st.markdown(
-        "Beräkna avkastning och lönsamhet för en investeringsfastighet i Örebro")
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+    st.markdown("Beräkna lönsamhet, cashflow och avkastning för en investeringsfastighet i Örebro.")
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        inv_pris = st.number_input(
-            "Köpeskilling (kr)", value=2000000, step=50000, format="%d")
-        kontant_inv = st.slider("Kontantinsats (%)", 10,
-                                50, 25, key="inv_kontant")
-        ranta_inv = st.slider("Bolåneränta (%)", 1.0, 10.0,
-                              4.5, step=0.1, key="inv_ranta")
-    with col2:
-        hyra = st.number_input("Hyresintäkt/månad (kr)",
-                               value=9000, step=500, format="%d")
-        avgift_inv = st.number_input("Månadsavgift (kr)", value=3500, step=100,
-                                     format="%d", key="inv_avgift")
-        drift = st.number_input("Driftkostnad/år (kr)",
-                                value=15000, step=1000, format="%d")
-    with col3:
-        vakans_pct = st.slider("Vakansgrad (%)", 0, 20,
-                               5, help="Andel av året utan hyresgäst")
-        vardeok_pct = st.slider(
-            "Förväntad värdeökning (%/år)", 0.0, 8.0, 3.0, step=0.5)
-        horisont = st.slider("Investeringshorisont (år)", 1, 20, 10)
+    tab_kalkyl, tab_exit = st.tabs(["📊 Löpande kalkyl", "🚪 Exit-analys"])
 
-    lan_inv = int(inv_pris * (1 - kontant_inv / 100))
-    kontant_kr = inv_pris - lan_inv
-    r_inv = ranta_inv / 100 / 12
-    n_inv = 30 * 12
-    manads_lan = lan_inv * r_inv * \
-        (1 + r_inv)**n_inv / ((1 + r_inv)**n_inv -
-                              1) if r_inv > 0 else lan_inv / n_inv
+    with tab_kalkyl:
+        st.markdown("#### Köp & finansiering")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            ip = st.number_input("Köpeskilling (kr)", value=2_000_000, step=50_000, format="%d", key="ip")
+            ik = st.slider("Kontantinsats (%)", 10, 50, 25, key="ik")
+            ir = st.slider("Bolåneränta (%)", 1.0, 10.0, 4.5, step=0.1, key="ir")
+        with c2:
+            hy = st.number_input("Hyra/mån (kr)", value=9_000, step=500, format="%d")
+            ia = st.number_input("Avgift/mån (kr)", value=3_000, step=100, format="%d", key="ia")
+            dr = st.number_input("Underhåll & drift/år (kr)", value=15_000, step=1_000, format="%d")
+        with c3:
+            vk = st.slider("Vakans (%)", 0, 20, 5, help="Andel av året fastigheten står tom")
+            am_pct = st.slider("Amortering (%/år av lån)", 0.0, 3.0, 1.0, step=0.5)
+            hz = st.slider("Horisont (år)", 1, 20, 10)
 
-    effektiv_hyra = hyra * 12 * (1 - vakans_pct / 100)
-    arliga_kostnader = avgift_inv * 12 + drift + manads_lan * 12
-    netto_cashflow_ar = effektiv_hyra - arliga_kostnader
-    brutto_yield = effektiv_hyra / inv_pris * 100
-    netto_yield = netto_cashflow_ar / inv_pris * 100
-    aterbetalning = kontant_kr / \
-        netto_cashflow_ar if netto_cashflow_ar > 0 else float('inf')
+        # --- Beräkningar ---
+        il = int(ip * (1 - ik / 100))
+        ikr = ip - il   # kontantinsats kr
 
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Bruttoavkastning", f"{brutto_yield:.1f}%")
-    c2.metric("Nettoavkastning", f"{netto_yield:.1f}%",
-              delta="positivt" if netto_yield > 0 else "negativt cashflow")
-    c3.metric("Månads-cashflow", f"{int(netto_cashflow_ar/12):,} kr",
-              delta=f"{'+' if netto_cashflow_ar > 0 else ''}{int(netto_cashflow_ar/12):,} kr/mån")
-    if aterbetalning < 50:
-        c4.metric("Återbetalningstid", f"{aterbetalning:.1f} år")
-    else:
-        c4.metric("Återbetalningstid", "Ej lönsamt")
+        # Transaktionskostnader
+        stampelskatt = ip * 0.015
+        pantbrev = il * 0.02
+        pantbrev_exp = 825
+        tot_trans = stampelskatt + pantbrev + pantbrev_exp
 
-    st.markdown("---")
-    # Värdeutveckling + total avkastning över horisont
-    years_inv = list(range(2026, 2026 + horisont + 1))
-    varden = [inv_pris * (1 + vardeok_pct / 100) **
-              i for i in range(horisont + 1)]
-    ack_cashflow = [max(0, netto_cashflow_ar * i) for i in range(horisont + 1)]
-    total_avk = [v + c - inv_pris for v, c in zip(varden, ack_cashflow)]
+        # Månadsränta
+        ri = ir / 100 / 12
+        n = 30 * 12
+        ml = il * ri * (1 + ri)**n / ((1 + ri)**n - 1) if ri > 0 else il / n
+        amortering_manad = il * am_pct / 100 / 12
 
-    fig = go.Figure()
-    fig.add_scatter(x=years_inv, y=varden, name="Fastighetsvärde",
-                    line=dict(color='#00D4AA', width=3))
-    fig.add_scatter(x=years_inv, y=[inv_pris] * len(years_inv), name="Köpeskilling",
-                    line=dict(color='#888', width=1, dash='dash'))
-    fig.add_bar(x=years_inv, y=ack_cashflow, name="Ackumulerat cashflow",
-                marker_color='rgba(102,126,234,0.5)')
-    fig.update_layout(
-        title=f"Värdeutveckling & cashflow över {horisont} år",
-        xaxis_title="År", yaxis_title="Kronor",
-        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)', height=400, hovermode='x unified',
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        # Intäkter
+        eff_hyra = hy * 12 * (1 - vk / 100)
 
-    tot_vinst = total_avk[-1]
-    roi = tot_vinst / kontant_kr * 100
-    col1, col2, col3 = st.columns(3)
-    col1.metric(f"Fastighetsvärde år {2026+horisont}", f"{int(varden[-1]):,} kr",
-                delta=f"+{int(varden[-1]-inv_pris):,} kr")
-    col2.metric(f"Ackumulerat cashflow", f"{int(ack_cashflow[-1]):,} kr")
-    col3.metric(f"Total avkastning på insats", f"{roi:.0f}%",
-                delta=f"{int(tot_vinst):,} kr vinst")
+        # Skatt på hyresintäkter (schablon: 40 000 kr avdrag, 30% på överskott)
+        hyra_skatteplikt = max(0, eff_hyra - 40_000)
+        hyra_skatt = hyra_skatteplikt * 0.30
 
-    st.caption("⚠️ Kalkylen är en uppskattning och inkluderar ej skatter, försäljningskostnader "
-               "eller oförutsedda utgifter. Ska inte ses som finansiell rådgivning.")
+        # Ränteavdrag 30%
+        ranteavdrag = ml * 12 * 0.30
+
+        # Kostnader
+        kost_lopande = ia * 12 + dr + ml * 12
+        kost_efter_skatt = kost_lopande + hyra_skatt - ranteavdrag
+
+        # Netto
+        netto_fore_skatt = eff_hyra - kost_lopande
+        netto_efter_skatt = eff_hyra - kost_efter_skatt
+
+        # Avkastning
+        by = eff_hyra / ip * 100
+        ny = netto_efter_skatt / ip * 100
+        cash_manad = netto_efter_skatt / 12
+
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+        # Transaktionskostnader
+        with st.expander("📋 Engångskostnader vid köp", expanded=False):
+            ec1, ec2, ec3, ec4 = st.columns(4)
+            ec1.metric("Kontantinsats", f"{int(ikr):,} kr")
+            ec2.metric("Stämpelskatt (1,5%)", f"{int(stampelskatt):,} kr")
+            ec3.metric("Pantbrevskostnad (2%)", f"{int(pantbrev):,} kr")
+            ec4.metric("Totalt kapital vid köp", f"{int(ikr + tot_trans):,} kr",
+                       help="Kontantinsats + alla engångskostnader")
+
+        # Nyckeltal
+        st.markdown("#### Nyckeltal")
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("Bruttoavkastning", f"{by:.1f}%", help="Hyresintäkter / köpeskilling")
+        m2.metric("Nettoavkastning", f"{ny:.1f}%",
+                  delta="Positivt" if ny > 0 else "Negativt",
+                  delta_color="normal" if ny > 0 else "inverse",
+                  help="Netto efter skatter och kostnader / köpeskilling")
+        m3.metric("Cashflow/mån", f"{int(cash_manad):,} kr",
+                  delta_color="normal" if cash_manad > 0 else "inverse")
+        m4.metric("Ränteavdrag/år", f"{int(ranteavdrag):,} kr",
+                  help="30% skattereduktion på räntekostnader")
+        m5.metric("Hyresskatt/år", f"{int(hyra_skatt):,} kr",
+                  help="30% skatt på hyresöverskott efter 40 000 kr schablonavdrag")
+
+        if netto_efter_skatt > 0:
+            aterbetalningstid = (ikr + tot_trans) / netto_efter_skatt
+            st.success(f"✅ Återbetalningstid på investerat kapital: **{aterbetalningstid:.1f} år**")
+        else:
+            st.error("❌ Negativ avkastning — kostnader överstiger intäkter efter skatt.")
+
+        # Månadsbudget
+        st.markdown("#### Månadsbudget")
+        mb1, mb2, mb3 = st.columns(3)
+        with mb1:
+            st.markdown("**Intäkter**")
+            st.markdown(f"Hyra (efter vakans): **{int(eff_hyra/12):,} kr/mån**")
+        with mb2:
+            st.markdown("**Kostnader**")
+            st.markdown(f"Ränta: {int(ml):,} kr  \nAmortering: {int(amortering_manad):,} kr  \n"
+                        f"Avgift: {int(ia):,} kr  \nDrift: {int(dr/12):,} kr")
+        with mb3:
+            st.markdown("**Skatter**")
+            st.markdown(f"Hyresskatt: {int(hyra_skatt/12):,} kr/mån  \n"
+                        f"Ränteavdrag: -{int(ranteavdrag/12):,} kr/mån")
+
+        # Graf: värde + ackumulerat cashflow
+        vo = st.slider("Antagen värdeökning (%/år)", 0.0, 8.0, 3.0, step=0.5)
+        yrs = list(range(2026, 2026 + hz + 1))
+        vals = [ip * (1 + vo / 100)**i for i in range(hz + 1)]
+        cf_acc = [max(0, netto_efter_skatt * i) for i in range(hz + 1)]
+        lan_kvar = [max(0, il * (1 - am_pct/100)**i) for i in range(hz + 1)]
+
+        fig = go.Figure()
+        fig.add_scatter(x=yrs, y=vals, name="Fastighetsvärde", line=dict(color='#10b981', width=3))
+        fig.add_scatter(x=yrs, y=lan_kvar, name="Kvarvarande lån", line=dict(color='#ef4444', width=2, dash='dot'))
+        if netto_efter_skatt > 0:
+            fig.add_bar(x=yrs, y=cf_acc, name="Ack. cashflow (efter skatt)", marker_color='rgba(99,102,241,0.4)')
+        fig.add_hline(y=ip + tot_trans, line_color='#f59e0b', line_dash='dot',
+                      annotation_text="Totalt investerat kapital", annotation_position="bottom right")
+        fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
+                          plot_bgcolor='rgba(0,0,0,0)', height=420, hovermode='x unified',
+                          yaxis_title="Kronor")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab_exit:
+        st.markdown("#### Vad händer om du säljer?")
+        st.markdown("Beräknar din vinst och skattekostnad vid försäljning efter X år.")
+
+        ex_ar = st.slider("Sälj efter (år)", 1, 20, 5, key="ex_ar")
+        ex_vo = st.slider("Värdeökning (%/år)", 0.0, 8.0, 3.0, step=0.5, key="ex_vo")
+        ip_ex = st.number_input("Köpeskilling (kr)", value=2_000_000, step=50_000, format="%d", key="ip_ex")
+        ik_ex = st.slider("Kontantinsats (%)", 10, 50, 25, key="ik_ex")
+        am_ex = st.slider("Amortering (%/år)", 0.0, 3.0, 1.0, step=0.5, key="am_ex")
+
+        il_ex = int(ip_ex * (1 - ik_ex / 100))
+        ikr_ex = ip_ex - il_ex
+        tot_trans_ex = ip_ex * 0.015 + il_ex * 0.02 + 825
+
+        forsaljningspris = ip_ex * (1 + ex_vo / 100)**ex_ar
+        kvar_lan = il_ex * (1 - am_ex / 100)**ex_ar
+        maklararvode = forsaljningspris * 0.025   # ~2,5%
+
+        # Kapitalvinst och skatt
+        inköpspris_inkl = ip_ex + tot_trans_ex
+        kapitalvinst = forsaljningspris - inköpspris_inkl - maklararvode
+        kapitalvinstskatt = max(0, kapitalvinst * 0.22)  # 22% reavinstskatt
+
+        netto_fran_forsaljning = forsaljningspris - kvar_lan - maklararvode - kapitalvinstskatt
+        total_avkastning = netto_fran_forsaljning - ikr_ex - tot_trans_ex
+
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        ex1, ex2, ex3, ex4 = st.columns(4)
+        ex1.metric("Försäljningspris", f"{int(forsaljningspris):,} kr")
+        ex2.metric("Kapitalvinst", f"{int(kapitalvinst):,} kr")
+        ex3.metric("Reavinstskatt (22%)", f"{int(kapitalvinstskatt):,} kr")
+        ex4.metric("Netto i handen", f"{int(netto_fran_forsaljning):,} kr",
+                   delta=f"{'+' if total_avkastning >= 0 else ''}{int(total_avkastning):,} kr vs investerat",
+                   delta_color="normal" if total_avkastning >= 0 else "inverse")
+
+        st.markdown(f"""
+        | Post | Belopp |
+        |---|---|
+        | Försäljningspris | {int(forsaljningspris):,} kr |
+        | − Kvarvarande lån | {int(kvar_lan):,} kr |
+        | − Mäklararvode (~2,5%) | {int(maklararvode):,} kr |
+        | − Reavinstskatt (22%) | {int(kapitalvinstskatt):,} kr |
+        | **= Netto efter försäljning** | **{int(netto_fran_forsaljning):,} kr** |
+        | − Ursprunglig investering | {int(ikr_ex + tot_trans_ex):,} kr |
+        | **= Total avkastning** | **{int(total_avkastning):,} kr** |
+        """)
+
+        st.caption("⚠️ Inte finansiell rådgivning. Skatteberäkningarna är förenklade — rådgör med skatterådgivare.")
+
+
+# ============================================================
+# 8. OM MODELLEN
+# ============================================================
+
+elif page == "ℹ️ Om modellen":
+    st.markdown("# ℹ️ Om ValuEstate")
+
+    # Hero-sektion
+    h1, h2, h3, h4 = st.columns(4)
+    h1.markdown(f"""<div style='background:#1f2937;border:1px solid #374151;border-radius:12px;
+        padding:20px;text-align:center;border-top:3px solid #10b981;'>
+        <div style='font-size:32px;font-weight:700;color:#10b981;'>{len(df):,}</div>
+        <div style='color:#9ca3af;font-size:13px;'>Sålda bostäder</div>
+        <div style='color:#6b7280;font-size:11px;'>2013–2026</div></div>""", unsafe_allow_html=True)
+    h2.markdown(f"""<div style='background:#1f2937;border:1px solid #374151;border-radius:12px;
+        padding:20px;text-align:center;border-top:3px solid #6366f1;'>
+        <div style='font-size:32px;font-weight:700;color:#6366f1;'>3</div>
+        <div style='color:#9ca3af;font-size:13px;'>ML-modeller</div>
+        <div style='color:#6b7280;font-size:11px;'>Lägenhet · Villa · Radhus</div></div>""", unsafe_allow_html=True)
+
+    best_r2 = max((_model_r2(m) for m in v2_models.values()), default=0) if v2_models else 0
+    h3.markdown(f"""<div style='background:#1f2937;border:1px solid #374151;border-radius:12px;
+        padding:20px;text-align:center;border-top:3px solid #fbbf24;'>
+        <div style='font-size:32px;font-weight:700;color:#fbbf24;'>{best_r2:.3f}</div>
+        <div style='color:#9ca3af;font-size:13px;'>Bästa R²</div>
+        <div style='color:#6b7280;font-size:11px;'>Förklaringsgrad</div></div>""", unsafe_allow_html=True)
+    live_count = len(df_active) if df_active is not None else 0
+    h4.markdown(f"""<div style='background:#1f2937;border:1px solid #374151;border-radius:12px;
+        padding:20px;text-align:center;border-top:3px solid #f43f5e;'>
+        <div style='font-size:32px;font-weight:700;color:#f43f5e;'>{live_count}</div>
+        <div style='color:#9ca3af;font-size:13px;'>Aktiva annonser</div>
+        <div style='color:#6b7280;font-size:11px;'>Analyserade idag</div></div>""", unsafe_allow_html=True)
+
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+    # Hur det fungerar
+    st.markdown("### Hur fungerar det?")
+    s1, s2, s3 = st.columns(3)
+    for col_el, num, title, desc, col in zip(
+        [s1, s2, s3],
+        ["1", "2", "3"],
+        ["Scrapar Hemnet", "ML analyserar", "Deal Score"],
+        [
+            "Varje dag hämtar vi alla aktiva annonser i Örebro kommun direkt från Hemnet — pris, storlek, område och mer.",
+            "Tre separata maskininlärningsmodeller (en per bostadstyp) estimerar marknadsvärdet baserat på 30+ egenskaper.",
+            "Varje annons får ett poäng 0–100 baserat på undervärdering, område, jämförbara försäljningar och modellkonfidans."
+        ],
+        ["#10b981", "#6366f1", "#fbbf24"]
+    ):
+        col_el.markdown(
+            f"<div style='background:#1f2937;border:1px solid #374151;border-radius:12px;padding:20px;height:160px;'>"
+            f"<div style='font-size:28px;font-weight:700;color:{col};margin-bottom:8px;'>{num}</div>"
+            f"<div style='font-size:15px;font-weight:600;color:#f9fafb;margin-bottom:8px;'>{title}</div>"
+            f"<div style='font-size:13px;color:#9ca3af;line-height:1.5;'>{desc}</div></div>",
+            unsafe_allow_html=True
+        )
+
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+    # Modellkort
+    if v2_models:
+        st.markdown("### Modellprestanda")
+        mc = st.columns(len(v2_models))
+        colors_m = {'lagenheter': '#10b981', 'villor': '#6366f1', 'radhus': '#f43f5e'}
+        for col_el, (typ, m) in zip(mc, v2_models.items()):
+            c = colors_m.get(typ, '#6b7280')
+            r2 = _model_r2(m)
+            mae = m['metrics'].get('MAE') or m['metrics'].get('lgbm_test', {}).get('MAE', 0)
+            _conf = m.get('confidence', {})
+            ci = _conf.get('interval_pct', '?') if isinstance(_conf, dict) else '?'
+            name = m.get('model_name', '?')
+            nfeat = len(m.get('feature_names', []))
+            ci_color = '#ef4444' if isinstance(ci, (int, float)) and ci > 20 else '#f9fafb'
+            col_el.markdown(
+                f"<div style='background:#1f2937;border:1px solid #374151;border-radius:12px;"
+                f"padding:20px;border-top:3px solid {c};'>"
+                f"<div style='font-size:16px;font-weight:700;color:{c};'>{TYP_LABELS[typ]}</div>"
+                f"<div style='color:#6b7280;font-size:12px;margin-bottom:12px;'>{name}</div>"
+                f"<div style='display:flex;justify-content:space-between;margin-bottom:6px;'>"
+                f"<span style='color:#9ca3af;font-size:12px;'>R²</span>"
+                f"<span style='font-weight:600;color:#f9fafb;'>{r2:.4f}</span></div>"
+                f"<div style='display:flex;justify-content:space-between;margin-bottom:6px;'>"
+                f"<span style='color:#9ca3af;font-size:12px;'>MAE</span>"
+                f"<span style='font-weight:600;color:#f9fafb;'>{mae:,} kr</span></div>"
+                f"<div style='display:flex;justify-content:space-between;margin-bottom:6px;'>"
+                f"<span style='color:#9ca3af;font-size:12px;'>Osäkerhet</span>"
+                f"<span style='font-weight:600;color:{ci_color};'>±{ci}%</span></div>"
+                f"<div style='display:flex;justify-content:space-between;'>"
+                f"<span style='color:#9ca3af;font-size:12px;'>Features</span>"
+                f"<span style='font-weight:600;color:#f9fafb;'>{nfeat} st</span></div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+    # Begränsningar
+    st.markdown("### Viktigt att veta")
+    b1, b2 = st.columns(2)
+    with b1:
+        st.markdown("""
+**Vad modellen ser:**
+- Boarea, rum, avgift, byggår, våning
+- Område och avstånd till centrum/station
+- Historiska jämförbara försäljningar
+- Säsong och marknadstrender
+""")
+    with b2:
+        st.markdown("""
+**Vad modellen inte ser:**
+- Skick, renovering och utsikt
+- Solläge och bullernivå
+- Planlösning och material
+- Budgivarnas psykologi
+""")
+
+    st.warning("⚠️ ValuEstate är ett beslutsstöd — inte finansiell rådgivning. Alltid konsultera mäklare.")
+
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown("*Byggd av **Loran Ali** · Statistik, Data & AI · Örebro 2026*")
