@@ -164,7 +164,11 @@ def load_v2_models():
         ]
         path = next((p for p in candidates if os.path.exists(p)), None)
         if path:
-            models[typ] = joblib.load(path)
+            try:
+                models[typ] = joblib.load(path)
+            except Exception as e:
+                st.warning(f"Kunde inte ladda {typ}-modell: {type(e).__name__}. "
+                           f"Prediktion ej tillgänglig — övriga vyer fungerar normalt.")
     return models if models else None
 
 
