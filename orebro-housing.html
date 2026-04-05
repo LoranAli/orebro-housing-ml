@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ValuEstate — AI-driven bostadsanalys · Örebro</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #04080f;
+      --surface:  #080d18;
+      --card:     #0d1626;
+      --border:   rgba(255,255,255,0.07);
+      --cyan:     #00d4ff;
+      --purple:   #a855f7;
+      --gold:     #f0a500;
+      --green:    #00ffb3;
+      --red:      #ff4d6d;
+      --yellow:   #fbbf24;
+      --text:     #f0f4ff;
+      --muted:    #6b7fa3;
+      --r:        16px;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    a { text-decoration: none; color: inherit; }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: #1e2d4d; border-radius: 99px; }
+
+    /* ─── NOISE OVERLAY ─── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      opacity: 0.4;
+    }
+
+    /* ─── AMBIENT GLOW BLOBS ─── */
+    .ambient {
+      position: fixed; pointer-events: none; z-index: 0;
+      border-radius: 50%; filter: blur(120px);
+    }
+    .ambient-1 {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(0,212,255,0.12) 0%, transparent 70%);
+      top: -200px; left: -100px;
+      animation: drift1 18s ease-in-out infinite alternate;
+    }
+    .ambient-2 {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(168,85,247,0.12) 0%, transparent 70%);
+      bottom: 10%; right: -100px;
+      animation: drift2 22s ease-in-out infinite alternate;
+    }
+    .ambient-3 {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(240,165,0,0.07) 0%, transparent 70%);
+      top: 50%; left: 40%;
+      animation: drift3 26s ease-in-out infinite alternate;
+    }
+    @keyframes drift1 { from{transform:translate(0,0)} to{transform:translate(80px,60px)} }
+    @keyframes drift2 { from{transform:translate(0,0)} to{transform:translate(-60px,40px)} }
+    @keyframes drift3 { from{transform:translate(-50%,-50%) scale(1)} to{transform:translate(-50%,-50%) scale(1.3)} }
+
+    /* ─── GRID PERSPECTIVE BG ─── */
+    .grid-bg {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+      -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 80%);
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 80%);
+    }
+
+    /* ─── NAV ─── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 5%; height: 68px;
+      background: rgba(4,8,15,0.75);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border-bottom: 1px solid rgba(0,212,255,0.1);
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 12px;
+      font-weight: 800; font-size: 1.15rem; letter-spacing: -0.5px;
+    }
+    .logo-mark {
+      width: 34px; height: 34px; border-radius: 9px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 900; color: #000;
+      box-shadow: 0 0 20px rgba(0,212,255,0.4);
+    }
+    .nav-links { display: flex; gap: 28px; }
+    .nav-links a {
+      font-size: 0.86rem; font-weight: 500; color: var(--muted);
+      transition: color 0.2s; position: relative;
+    }
+    .nav-links a::after {
+      content: ''; position: absolute; bottom: -4px; left: 0; right: 0;
+      height: 1px; background: var(--cyan);
+      transform: scaleX(0); transition: transform 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-links a:hover::after { transform: scaleX(1); }
+    .nav-cta {
+      position: relative; overflow: hidden;
+      background: transparent;
+      border: 1px solid rgba(0,212,255,0.5);
+      color: var(--cyan); padding: 9px 22px; border-radius: 8px;
+      font-size: 0.84rem; font-weight: 600;
+      transition: all 0.25s;
+    }
+    .nav-cta::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      opacity: 0; transition: opacity 0.25s;
+    }
+    .nav-cta:hover { color: #000; border-color: transparent; box-shadow: 0 0 24px rgba(0,212,255,0.4); }
+    .nav-cta:hover::before { opacity: 1; }
+    .nav-cta span { position: relative; z-index: 1; }
+
+    /* ─── HERO ─── */
+    .hero {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: grid; grid-template-columns: 1fr 1fr;
+      align-items: center; gap: 60px;
+      padding: 120px 5% 80px;
+      max-width: 1280px; margin: 0 auto;
+    }
+    @media(max-width:900px){ .hero { grid-template-columns:1fr; text-align:center; } }
+    .hero-left { position: relative; }
+
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--cyan);
+      margin-bottom: 24px;
+    }
+    .eyebrow-line {
+      width: 28px; height: 1px;
+      background: linear-gradient(90deg, var(--cyan), transparent);
+    }
+
+    h1 {
+      font-size: clamp(2.6rem, 5.5vw, 4rem);
+      font-weight: 900; letter-spacing: -2px;
+      line-height: 1.05; margin-bottom: 24px;
+      color: var(--text);
+    }
+    .h1-line2 {
+      background: linear-gradient(90deg, var(--cyan) 0%, var(--purple) 60%, var(--gold) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-sub {
+      font-size: 1.1rem; color: var(--muted); max-width: 480px;
+      line-height: 1.7; margin-bottom: 40px; font-weight: 400;
+    }
+    @media(max-width:900px){ .hero-sub { margin: 0 auto 40px; } }
+
+    .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; }
+    @media(max-width:900px){ .hero-actions { justify-content: center; } }
+
+    .btn-glow {
+      position: relative; overflow: hidden;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      color: #000; padding: 14px 32px; border-radius: 10px;
+      font-weight: 700; font-size: 0.95rem;
+      box-shadow: 0 0 32px rgba(0,212,255,0.3), 0 4px 16px rgba(0,0,0,0.4);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-glow::after {
+      content: ''; position: absolute; top: 0; left: -100%;
+      width: 60%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+      transition: left 0.5s;
+    }
+    .btn-glow:hover { transform: translateY(-3px); box-shadow: 0 0 48px rgba(0,212,255,0.45), 0 8px 24px rgba(0,0,0,0.4); }
+    .btn-glow:hover::after { left: 150%; }
+
+    .btn-glass {
+      background: rgba(255,255,255,0.04);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--text); padding: 14px 32px; border-radius: 10px;
+      font-weight: 600; font-size: 0.95rem;
+      transition: all 0.2s;
+    }
+    .btn-glass:hover { background: rgba(255,255,255,0.08); border-color: rgba(0,212,255,0.3); }
+
+    /* ─── HERO 3D CARD ─── */
+    .hero-right {
+      perspective: 1200px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .card-3d-wrapper {
+      width: 100%; max-width: 420px;
+      transform-style: preserve-3d;
+      transition: transform 0.1s ease-out;
+    }
+    .hero-card {
+      background: linear-gradient(145deg, rgba(13,22,38,0.9) 0%, rgba(8,13,24,0.95) 100%);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 20px; padding: 32px;
+      box-shadow:
+        0 0 0 1px rgba(0,212,255,0.05),
+        0 40px 80px rgba(0,0,0,0.6),
+        0 0 60px rgba(0,212,255,0.08),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+      transform-style: preserve-3d;
+      position: relative;
+    }
+    .hero-card::before {
+      content: ''; position: absolute; inset: 0; border-radius: 20px;
+      background: linear-gradient(135deg, rgba(0,212,255,0.06) 0%, transparent 50%, rgba(168,85,247,0.06) 100%);
+      pointer-events: none;
+    }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px; transform: translateZ(20px);
+    }
+    .card-address { font-size: 0.85rem; color: var(--muted); }
+    .card-address strong { display: block; color: var(--text); font-size: 1rem; font-weight: 700; }
+    .live-badge {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(0,255,179,0.1); border: 1px solid rgba(0,255,179,0.3);
+      color: var(--green); font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; padding: 5px 12px; border-radius: 99px;
+    }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.8)} }
+
+    .score-display {
+      display: flex; align-items: center; gap: 24px;
+      background: rgba(0,0,0,0.3); border-radius: 14px;
+      padding: 20px 24px; margin-bottom: 20px;
+      border: 1px solid rgba(255,255,255,0.05);
+      transform: translateZ(30px);
+    }
+    .score-circle-3d {
+      position: relative; width: 90px; height: 90px; flex-shrink: 0;
+    }
+    .score-circle-3d svg { transform: rotate(-90deg); }
+    .ring-track { fill: none; stroke: rgba(255,255,255,0.07); stroke-width: 8; }
+    .ring-fill {
+      fill: none; stroke: url(#heroGrad); stroke-width: 8;
+      stroke-linecap: round; stroke-dasharray: 251; stroke-dashoffset: 50;
+      filter: drop-shadow(0 0 6px rgba(0,212,255,0.6));
+      transition: stroke-dashoffset 1.5s cubic-bezier(0.4,0,0.2,1);
+    }
+    .score-number {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    .sn-val { font-size: 1.8rem; font-weight: 900; letter-spacing: -1px; color: var(--green); }
+    .sn-lbl { font-size: 0.6rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+    .score-info { flex: 1; }
+    .score-info h4 { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+    .score-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(0,255,179,0.1); border: 1px solid rgba(0,255,179,0.25);
+      color: var(--green); font-size: 0.75rem; font-weight: 700;
+      padding: 4px 12px; border-radius: 99px; margin-bottom: 10px;
+    }
+    .price-diff {
+      font-size: 0.82rem; color: var(--muted); line-height: 1.6;
+    }
+    .price-diff strong { color: var(--green); }
+
+    .card-metrics {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+      transform: translateZ(20px);
+    }
+    .metric {
+      background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 10px; padding: 12px; text-align: center;
+    }
+    .metric-val { font-size: 1rem; font-weight: 800; color: var(--cyan); letter-spacing: -0.5px; }
+    .metric-lbl { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
+
+    .card-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 20px; padding-top: 16px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.78rem; color: var(--muted);
+      transform: translateZ(15px);
+    }
+    .model-chip {
+      background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(168,85,247,0.1));
+      border: 1px solid rgba(0,212,255,0.2);
+      color: var(--cyan); font-size: 0.7rem; font-weight: 600;
+      padding: 4px 10px; border-radius: 6px;
+    }
+
+    /* ─── STATS BAR ─── */
+    .stats-bar {
+      position: relative; z-index: 1;
+      display: flex; justify-content: center; flex-wrap: wrap;
+      max-width: 900px; margin: 0 auto;
+      padding: 0 5% 80px;
+      gap: 1px;
+    }
+    .stat-item {
+      flex: 1; min-width: 160px;
+      background: linear-gradient(145deg, rgba(13,22,38,0.8), rgba(8,13,24,0.8));
+      border: 1px solid rgba(255,255,255,0.06);
+      padding: 28px 24px; text-align: center;
+      position: relative; overflow: hidden;
+      transition: transform 0.3s, border-color 0.3s;
+    }
+    .stat-item:first-child { border-radius: 14px 0 0 14px; }
+    .stat-item:last-child { border-radius: 0 14px 14px 0; }
+    .stat-item:hover { transform: translateY(-4px); border-color: rgba(0,212,255,0.2); z-index: 2; }
+    .stat-item::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(0,212,255,0.03) 0%, transparent 100%);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .stat-item:hover::before { opacity: 1; }
+    .s-val { font-size: 2rem; font-weight: 900; letter-spacing: -1.5px; margin-bottom: 4px; }
+    .s-lbl { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.5px; }
+
+    /* ─── TICKER ─── */
+    .ticker-wrap {
+      position: relative; z-index: 1;
+      overflow: hidden; padding: 14px 0;
+      background: rgba(255,255,255,0.02);
+      border-top: 1px solid rgba(0,212,255,0.08);
+      border-bottom: 1px solid rgba(0,212,255,0.08);
+    }
+    .ticker-track {
+      display: flex; gap: 40px; width: max-content;
+      animation: ticker 30s linear infinite;
+    }
+    @keyframes ticker { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+    .ticker-item { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; white-space: nowrap; color: var(--muted); }
+    .ticker-item .name { font-weight: 600; color: var(--text); }
+    .up { color: var(--green); font-weight: 600; }
+    .down { color: var(--red); font-weight: 600; }
+    .ticker-sep { color: rgba(255,255,255,0.1); font-size: 0.6rem; }
+
+    /* ─── SECTIONS ─── */
+    .section-wrap {
+      position: relative; z-index: 1;
+      max-width: 1200px; margin: 0 auto;
+      padding: 100px 5%;
+    }
+    .section-eyebrow {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--cyan); margin-bottom: 16px;
+    }
+    .section-eyebrow-line {
+      flex: 1; height: 1px; max-width: 40px;
+      background: linear-gradient(90deg, var(--cyan), transparent);
+    }
+    h2 {
+      font-size: clamp(1.9rem, 4vw, 3rem);
+      font-weight: 900; letter-spacing: -1.5px;
+      line-height: 1.1; margin-bottom: 16px;
+    }
+    .section-desc { color: var(--muted); font-size: 1rem; max-width: 500px; line-height: 1.7; }
+    .center-text { text-align: center; }
+    .center-text .section-desc { margin: 0 auto; }
+
+    /* ─── HOW IT WORKS ─── */
+    .how-bg { background: var(--surface); }
+    .steps-3d {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px; margin-top: 64px;
+    }
+    .step-3d {
+      perspective: 800px;
+    }
+    .step-inner {
+      background: linear-gradient(145deg, var(--card), rgba(8,13,24,0.9));
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 16px; padding: 32px 26px;
+      position: relative; overflow: hidden;
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.3s, box-shadow 0.4s;
+      transform-style: preserve-3d;
+      cursor: default;
+    }
+    .step-inner::after {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(0,212,255,0.4), transparent);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .step-3d:hover .step-inner {
+      transform: rotateX(8deg) rotateY(-4deg) translateY(-8px);
+      border-color: rgba(0,212,255,0.25);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(0,212,255,0.08);
+    }
+    .step-3d:hover .step-inner::after { opacity: 1; }
+    .step-num-tag {
+      font-size: 0.65rem; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase; color: rgba(0,212,255,0.5);
+      margin-bottom: 20px;
+    }
+    .step-icon-wrap {
+      width: 52px; height: 52px; border-radius: 13px;
+      background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(168,85,247,0.1));
+      border: 1px solid rgba(0,212,255,0.15);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; margin-bottom: 18px;
+      box-shadow: 0 4px 16px rgba(0,212,255,0.08);
+    }
+    .step-inner h3 { font-size: 1rem; font-weight: 700; margin-bottom: 10px; }
+    .step-inner p { font-size: 0.84rem; color: var(--muted); line-height: 1.65; }
+
+    .connector {
+      display: flex; align-items: center; justify-content: center;
+      color: rgba(0,212,255,0.3); font-size: 1.2rem;
+      padding-top: 32px;
+    }
+    @media(max-width:768px){ .connector { display: none; } }
+
+    /* ─── DEAL SCORE ─── */
+    .deal-layout {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 56px; align-items: center; margin-top: 64px;
+    }
+    @media(max-width:900px){ .deal-layout { grid-template-columns:1fr; } }
+
+    .deal-widget {
+      position: relative; perspective: 1000px;
+    }
+    .deal-widget-inner {
+      background: linear-gradient(145deg, rgba(13,22,38,0.95), rgba(8,13,24,0.98));
+      border: 1px solid rgba(0,212,255,0.15);
+      border-radius: 20px; padding: 40px;
+      text-align: center;
+      box-shadow: 0 0 0 1px rgba(0,212,255,0.04), 0 40px 80px rgba(0,0,0,0.5), 0 0 80px rgba(0,212,255,0.06);
+      transform: perspective(1000px) rotateY(-8deg) rotateX(4deg);
+      transition: transform 0.5s;
+    }
+    .deal-widget:hover .deal-widget-inner {
+      transform: perspective(1000px) rotateY(0deg) rotateX(0deg);
+    }
+    .big-ring {
+      position: relative; width: 180px; height: 180px; margin: 0 auto 28px;
+    }
+    .big-ring svg { transform: rotate(-90deg); filter: drop-shadow(0 0 12px rgba(0,212,255,0.3)); }
+    .big-ring-bg { fill: none; stroke: rgba(255,255,255,0.05); stroke-width: 12; }
+    .big-ring-fill {
+      fill: none; stroke: url(#dealGrad); stroke-width: 12;
+      stroke-linecap: round;
+      stroke-dasharray: 502;
+      stroke-dashoffset: 100;
+      transition: stroke-dashoffset 2s cubic-bezier(0.4,0,0.2,1);
+    }
+    .big-score-num {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    .bsn { font-size: 3.5rem; font-weight: 900; letter-spacing: -2px;
+      background: linear-gradient(135deg, var(--cyan), var(--green));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .bsn-sub { font-size: 0.72rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+    .deal-verdict {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(0,255,179,0.08); border: 1px solid rgba(0,255,179,0.25);
+      color: var(--green); padding: 10px 22px; border-radius: 99px;
+      font-weight: 700; font-size: 0.9rem; margin-bottom: 24px;
+    }
+    .deal-details {
+      background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 12px; padding: 16px 20px;
+      font-size: 0.82rem; color: var(--muted); line-height: 1.8; text-align: left;
+    }
+    .deal-details strong { color: var(--text); }
+    .deal-details .plus { color: var(--green); font-weight: 700; }
+
+    .bands-list { display: flex; flex-direction: column; gap: 10px; }
+    .band-row {
+      display: flex; align-items: center; gap: 14px;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 12px; padding: 14px 18px;
+      transition: border-color 0.2s, background 0.2s, transform 0.2s;
+    }
+    .band-row:hover { border-color: rgba(0,212,255,0.15); background: rgba(0,212,255,0.03); transform: translateX(4px); }
+    .band-color { width: 3px; height: 36px; border-radius: 99px; flex-shrink: 0; }
+    .band-text { flex: 1; }
+    .band-title { font-size: 0.9rem; font-weight: 700; margin-bottom: 2px; }
+    .band-sub { font-size: 0.78rem; color: var(--muted); }
+    .band-score { font-size: 0.85rem; font-weight: 800; }
+
+    /* ─── FEATURES ─── */
+    .feature-grid-3d {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px; margin-top: 64px;
+    }
+    .feat-card {
+      background: linear-gradient(145deg, rgba(13,22,38,0.8), rgba(8,13,24,0.9));
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px; padding: 28px;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      position: relative; overflow: hidden;
+    }
+    .feat-card::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(circle at 0% 0%, rgba(0,212,255,0.06) 0%, transparent 60%);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .feat-card:hover {
+      transform: translateY(-6px) scale(1.01);
+      border-color: rgba(0,212,255,0.2);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4), 0 0 30px rgba(0,212,255,0.06);
+    }
+    .feat-card:hover::before { opacity: 1; }
+    .feat-icon {
+      width: 48px; height: 48px; border-radius: 12px; margin-bottom: 18px;
+      background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(168,85,247,0.1));
+      border: 1px solid rgba(0,212,255,0.12);
+      display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
+    }
+    .feat-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .feat-card p { font-size: 0.84rem; color: var(--muted); line-height: 1.65; }
+
+    /* ─── MODELS ─── */
+    .models-wrap { background: var(--surface); }
+    .models-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 16px; margin-top: 64px;
+    }
+    .model-3d {
+      perspective: 700px;
+    }
+    .model-inner {
+      background: linear-gradient(145deg, var(--card), rgba(8,13,24,0.95));
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 16px; padding: 26px;
+      position: relative; overflow: hidden;
+      transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.3s, box-shadow 0.4s;
+      transform-style: preserve-3d;
+    }
+    .model-3d:hover .model-inner {
+      transform: rotateX(6deg) rotateY(6deg) translateZ(10px);
+      border-color: rgba(168,85,247,0.3);
+      box-shadow: -10px 15px 40px rgba(0,0,0,0.5), 0 0 30px rgba(168,85,247,0.08);
+    }
+    .model-winner {
+      position: absolute; top: 0; right: 0;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      color: #000; font-size: 0.65rem; font-weight: 800; letter-spacing: 1px;
+      text-transform: uppercase; padding: 6px 14px;
+      border-radius: 0 16px 0 12px;
+    }
+    .model-tag-chip {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--purple); margin-bottom: 12px;
+    }
+    .model-inner h3 { font-size: 1.05rem; font-weight: 800; margin-bottom: 8px; }
+    .model-inner p { font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
+    .model-r2-bar {
+      margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.05);
+    }
+    .r2-label { display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 8px; }
+    .r2-label .r2-name { color: var(--muted); }
+    .r2-label .r2-val { color: var(--green); font-weight: 700; }
+    .r2-track {
+      height: 4px; background: rgba(255,255,255,0.05); border-radius: 99px; overflow: hidden;
+    }
+    .r2-fill {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--cyan), var(--green));
+      box-shadow: 0 0 8px rgba(0,212,255,0.4);
+    }
+
+    /* ─── PRICING ─── */
+    .billing-toggle {
+      display: flex; align-items: center; justify-content: center;
+      gap: 14px; margin: 40px auto 0; font-size: 0.88rem;
+    }
+    .toggle-label { color: var(--muted); transition: color 0.2s; }
+    .toggle-label.active { color: var(--text); font-weight: 600; }
+    .toggle-switch {
+      position: relative; width: 50px; height: 28px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 99px; cursor: pointer;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .toggle-switch.yearly { background: rgba(0,212,255,0.2); border-color: rgba(0,212,255,0.4); }
+    .toggle-knob {
+      position: absolute; top: 3px; left: 3px;
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--text);
+      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    .toggle-switch.yearly .toggle-knob { transform: translateX(22px); }
+    .save-pill {
+      background: rgba(0,255,179,0.1); border: 1px solid rgba(0,255,179,0.25);
+      color: var(--green); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px;
+      padding: 3px 10px; border-radius: 99px;
+    }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 18px; margin-top: 52px; align-items: start;
+    }
+    .price-card {
+      background: linear-gradient(145deg, rgba(13,22,38,0.9), rgba(8,13,24,0.95));
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 20px; padding: 34px 30px;
+      position: relative; overflow: hidden;
+      transition: transform 0.3s, border-color 0.3s, box-shadow 0.3s;
+    }
+    .price-card:hover { transform: translateY(-6px); }
+    .price-card.featured {
+      border-color: rgba(0,212,255,0.3);
+      background: linear-gradient(145deg, rgba(0,60,90,0.2), rgba(8,13,24,0.95));
+      box-shadow: 0 0 0 1px rgba(0,212,255,0.05), 0 0 60px rgba(0,212,255,0.08), 0 20px 50px rgba(0,0,0,0.4);
+    }
+    .price-card.featured:hover { box-shadow: 0 0 0 1px rgba(0,212,255,0.1), 0 0 80px rgba(0,212,255,0.12), 0 30px 60px rgba(0,0,0,0.5); }
+    .popular-ribbon {
+      position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
+      background: linear-gradient(90deg, var(--cyan), var(--purple));
+      color: #000; font-size: 0.68rem; font-weight: 800; letter-spacing: 1px;
+      text-transform: uppercase; padding: 5px 20px; border-radius: 0 0 10px 10px;
+    }
+    .plan-tier { font-size: 0.68rem; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; color: var(--muted); }
+    .plan-tier.pro { color: var(--cyan); }
+    .plan-tier.biz { color: var(--purple); }
+    .plan-name { font-size: 1.4rem; font-weight: 900; margin-bottom: 8px; }
+    .plan-desc { font-size: 0.84rem; color: var(--muted); margin-bottom: 28px; line-height: 1.6; }
+    .plan-price { display: flex; align-items: flex-end; gap: 6px; margin-bottom: 6px; }
+    .price-big { font-size: 3rem; font-weight: 900; letter-spacing: -2px; line-height: 1; }
+    .price-unit { font-size: 0.88rem; color: var(--muted); padding-bottom: 8px; }
+    .price-note { font-size: 0.76rem; color: var(--muted); min-height: 18px; margin-bottom: 28px; }
+    .price-note .save { color: var(--green); font-weight: 600; }
+    .divider { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin-bottom: 24px; }
+    .feat-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 30px; }
+    .feat-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 0.84rem; line-height: 1.5; }
+    .fi { flex-shrink: 0; margin-top: 1px; font-size: 0.85rem; }
+    .fi.yes { color: var(--green); }
+    .fi.part { color: var(--yellow); }
+    .fi.no { color: rgba(255,255,255,0.15); }
+    .fi-note { font-size: 0.74rem; color: var(--muted); display: block; margin-top: 1px; }
+    .plan-btn {
+      display: block; width: 100%; text-align: center;
+      padding: 13px; border-radius: 10px;
+      font-weight: 700; font-size: 0.9rem; cursor: pointer;
+      transition: all 0.25s;
+    }
+    .plan-btn.outline {
+      border: 1px solid rgba(255,255,255,0.1); color: var(--text); background: transparent;
+    }
+    .plan-btn.outline:hover { border-color: rgba(0,212,255,0.4); background: rgba(0,212,255,0.05); }
+    .plan-btn.glow {
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      color: #000;
+      box-shadow: 0 4px 24px rgba(0,212,255,0.25);
+    }
+    .plan-btn.glow:hover { transform: translateY(-2px); box-shadow: 0 8px 36px rgba(0,212,255,0.4); }
+    .plan-btn.purple-btn {
+      background: linear-gradient(135deg, var(--purple), #6d28d9);
+      color: #fff;
+      box-shadow: 0 4px 24px rgba(168,85,247,0.25);
+    }
+    .plan-btn.purple-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 36px rgba(168,85,247,0.4); }
+
+    /* ─── CTA ─── */
+    .cta-wrap {
+      position: relative; z-index: 1;
+      text-align: center; padding: 120px 5%;
+      overflow: hidden;
+    }
+    .cta-bg {
+      position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 60% 60% at 50% 50%, rgba(0,212,255,0.06) 0%, transparent 70%),
+        linear-gradient(180deg, transparent 0%, rgba(168,85,247,0.04) 50%, transparent 100%);
+    }
+    .cta-wrap h2 { margin-bottom: 20px; }
+    .cta-wrap .section-desc { margin: 0 auto 44px; }
+
+    /* ─── FOOTER ─── */
+    footer {
+      position: relative; z-index: 1;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      padding: 36px 5%;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+      font-size: 0.8rem; color: var(--muted);
+    }
+    .footer-brand { font-weight: 800; font-size: 0.95rem; color: var(--text); }
+    .footer-dots { display: flex; gap: 6px; align-items: center; }
+    .fdot { width: 4px; height: 4px; border-radius: 50%; }
+
+    /* ─── FLOATING PARTICLES ─── */
+    .particles {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+    }
+    .particle {
+      position: absolute; border-radius: 50%;
+      animation: float-up linear infinite;
+    }
+    @keyframes float-up {
+      0% { transform: translateY(100vh) scale(0); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 0.5; }
+      100% { transform: translateY(-10vh) scale(1.5); opacity: 0; }
+    }
+
+    /* ─── RESPONSIVE ─── */
+    @media(max-width:768px) {
+      .nav-links { display: none; }
+      h1 { letter-spacing: -1px; }
+      .deal-widget-inner { transform: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Ambient & BG -->
+<div class="ambient ambient-1"></div>
+<div class="ambient ambient-2"></div>
+<div class="ambient ambient-3"></div>
+<div class="grid-bg"></div>
+<div class="particles" id="particles"></div>
+
+<!-- ─── NAV ─── -->
+<nav>
+  <div class="nav-logo">
+    <div class="logo-mark">VE</div>
+    ValuEstate
+  </div>
+  <div class="nav-links">
+    <a href="#hur">Hur det funkar</a>
+    <a href="#deal-score">Deal Score</a>
+    <a href="#features">Funktioner</a>
+    <a href="#modeller">Modeller</a>
+    <a href="#priser">Priser</a>
+  </div>
+  <a href="#cta" class="nav-cta"><span>Kom igång</span></a>
+</nav>
+
+<!-- ─── HERO ─── -->
+<div style="position:relative;z-index:1;">
+  <div class="hero">
+    <!-- Left -->
+    <div class="hero-left">
+      <div class="eyebrow">
+        <div class="eyebrow-line"></div>
+        AI-driven bostadsanalys · Örebro
+      </div>
+      <h1>Är bostaden<br/><span class="h1-line2">värd att köpa?</span></h1>
+      <p class="hero-sub">
+        En intelligent bostadsagent som analyserar varje annons mot marknaden
+        och ger dig ett tydligt svar — innan du lägger ett bud.
+      </p>
+      <div class="hero-actions">
+        <a href="#deal-score" class="btn-glow">Se Deal Score →</a>
+        <a href="#hur" class="btn-glass">Läs mer</a>
+      </div>
+    </div>
+
+    <!-- Right — 3D Card -->
+    <div class="hero-right">
+      <div class="card-3d-wrapper" id="card3d">
+        <div class="hero-card">
+          <defs>
+            <linearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#00d4ff"/>
+              <stop offset="100%" stop-color="#00ffb3"/>
+            </linearGradient>
+          </defs>
+          <div class="card-header">
+            <div class="card-address">
+              <strong>Marieberg, 3:a · 68 m²</strong>
+              Örebro, Sverige
+            </div>
+            <div class="live-badge">
+              <div class="live-dot"></div>
+              Live
+            </div>
+          </div>
+
+          <div class="score-display">
+            <div class="score-circle-3d">
+              <svg width="90" height="90" viewBox="0 0 90 90">
+                <defs>
+                  <linearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#00d4ff"/>
+                    <stop offset="100%" stop-color="#00ffb3"/>
+                  </linearGradient>
+                </defs>
+                <circle class="ring-track" cx="45" cy="45" r="40"/>
+                <circle class="ring-fill" cx="45" cy="45" r="40" id="heroRing"/>
+              </svg>
+              <div class="score-number">
+                <span class="sn-val">80</span>
+                <span class="sn-lbl">/100</span>
+              </div>
+            </div>
+            <div class="score-info">
+              <h4>Deal Score</h4>
+              <div class="score-tag">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                Köpvärd
+              </div>
+              <div class="price-diff">
+                ML: <strong>2 680 000 kr</strong><br/>
+                Begärt: 2 450 000 kr<br/>
+                <strong>+230 000 kr under</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-metrics">
+            <div class="metric">
+              <div class="metric-val">3</div>
+              <div class="metric-lbl">ML-modeller</div>
+            </div>
+            <div class="metric">
+              <div class="metric-val">95%</div>
+              <div class="metric-lbl">R² precision</div>
+            </div>
+            <div class="metric">
+              <div class="metric-val">90d</div>
+              <div class="metric-lbl">Comps</div>
+            </div>
+          </div>
+
+          <div class="card-footer">
+            <span>Analyserad av ValuEstate AI</span>
+            <div class="model-chip">LightGBM + CatBoost Stack</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats bar -->
+  <div class="stats-bar">
+    <div class="stat-item">
+      <div class="s-val" style="background:linear-gradient(135deg,#00ffb3,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">95%</div>
+      <div class="s-lbl">Bästa R² (lägenheter)</div>
+    </div>
+    <div class="stat-item">
+      <div class="s-val" style="color:var(--cyan)">3</div>
+      <div class="s-lbl">ML-modeller</div>
+    </div>
+    <div class="stat-item">
+      <div class="s-val" style="color:var(--purple)">90 dagar</div>
+      <div class="s-lbl">Comps-analys</div>
+    </div>
+    <div class="stat-item">
+      <div class="s-val" style="color:var(--green)">Live</div>
+      <div class="s-lbl">Hemnet-data</div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TICKER ─── -->
+<div class="ticker-wrap" aria-hidden="true">
+  <div class="ticker-track">
+    <div class="ticker-item"><span class="name">Adolfsberg</span><span class="up">▲ +3.2%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Brickebacken</span><span class="down">▼ -1.1%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Centrum</span><span class="up">▲ +5.7%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Ekeby</span><span class="up">▲ +2.4%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Hovsta</span><span class="down">▼ -0.8%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Karlslund</span><span class="up">▲ +4.1%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Lillå</span><span class="up">▲ +1.9%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Marieberg</span><span class="up">▲ +6.3%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Norra Eklunda</span><span class="down">▼ -2.0%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Varberga</span><span class="up">▲ +0.5%</span></div><div class="ticker-sep">◆</div>
+    <!-- duplicate -->
+    <div class="ticker-item"><span class="name">Adolfsberg</span><span class="up">▲ +3.2%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Brickebacken</span><span class="down">▼ -1.1%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Centrum</span><span class="up">▲ +5.7%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Ekeby</span><span class="up">▲ +2.4%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Hovsta</span><span class="down">▼ -0.8%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Karlslund</span><span class="up">▲ +4.1%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Lillå</span><span class="up">▲ +1.9%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Marieberg</span><span class="up">▲ +6.3%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Norra Eklunda</span><span class="down">▼ -2.0%</span></div><div class="ticker-sep">◆</div>
+    <div class="ticker-item"><span class="name">Varberga</span><span class="up">▲ +0.5%</span></div>
+  </div>
+</div>
+
+<!-- ─── HOW IT WORKS ─── -->
+<div class="how-bg">
+  <div class="section-wrap" id="hur">
+    <div class="section-eyebrow">
+      <div class="section-eyebrow-line"></div>
+      Processen
+    </div>
+    <h2>Från annons till<br/>beslut på sekunder</h2>
+    <p class="section-desc">Vi hämtar data direkt från Hemnet, bearbetar den genom vår pipeline och låter tre specialiserade ML-modeller räkna ut om priset är rätt.</p>
+
+    <div class="steps-3d">
+      <div class="step-3d">
+        <div class="step-inner">
+          <div class="step-num-tag">Steg 01</div>
+          <div class="step-icon-wrap">🔍</div>
+          <h3>Datainsamling</h3>
+          <p>Vår scraper hämtar aktiva annonser och historiska försäljningar från Hemnet i realtid.</p>
+        </div>
+      </div>
+      <div class="step-3d">
+        <div class="step-inner">
+          <div class="step-num-tag">Steg 02</div>
+          <div class="step-icon-wrap">⚙️</div>
+          <h3>Pipeline & features</h3>
+          <p>Data rensas och berikas med geokodning — avstånd till centrum, station, USÖ — och comps-analys över 90 dagar.</p>
+        </div>
+      </div>
+      <div class="step-3d">
+        <div class="step-inner">
+          <div class="step-num-tag">Steg 03</div>
+          <div class="step-icon-wrap">🧠</div>
+          <h3>ML-prediktion</h3>
+          <p>LightGBM + CatBoost stack för villa och radhus, Random Forest för lägenheter. Varje estimat ges med konfidensintervall (q10/q90).</p>
+        </div>
+      </div>
+      <div class="step-3d">
+        <div class="step-inner">
+          <div class="step-num-tag">Steg 04</div>
+          <div class="step-icon-wrap">📊</div>
+          <h3>Deal Score + SHAP</h3>
+          <p>Skillnaden mot begärt pris blir ett 0–100-betyg. SHAP-analysen förklarar exakt vilka features som driver priset.</p>
+        </div>
+      </div>
+      <div class="step-3d">
+        <div class="step-inner">
+          <div class="step-num-tag">Steg 05</div>
+          <div class="step-icon-wrap">🔔</div>
+          <h3>Email-notiser</h3>
+          <p>Spara ett filter på område, typ och min deal score. Systemet emailar automatiskt när en matchande annons hittas.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── DEAL SCORE ─── -->
+<div class="section-wrap" id="deal-score">
+  <div class="section-eyebrow">
+    <div class="section-eyebrow-line"></div>
+    Deal Score Engine
+  </div>
+  <h2>Ett tal.<br/>Ett beslut.</h2>
+  <p class="section-desc">Deal Score är hjärtat i systemet — ett objektivt mått på om en bostad är undervärderad, rätt prissatt eller för dyr.</p>
+
+  <div class="deal-layout">
+    <!-- 3D Widget -->
+    <div class="deal-widget">
+      <div class="deal-widget-inner">
+        <div class="big-ring">
+          <svg width="180" height="180" viewBox="0 0 180 180">
+            <defs>
+              <linearGradient id="dealGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#00d4ff"/>
+                <stop offset="100%" stop-color="#00ffb3"/>
+              </linearGradient>
+            </defs>
+            <circle class="big-ring-bg" cx="90" cy="90" r="80"/>
+            <circle class="big-ring-fill" cx="90" cy="90" r="80" id="dealRing"/>
+          </svg>
+          <div class="big-score-num">
+            <span class="bsn">80</span>
+            <span class="bsn-sub">/ 100</span>
+          </div>
+        </div>
+
+        <div class="deal-verdict">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          Köpvärd — under marknadspris
+        </div>
+
+        <div class="deal-details">
+          Begärt pris: <strong>2 450 000 kr</strong><br/>
+          ML-predikterat värde: <strong>2 680 000 kr</strong><br/>
+          Skillnad: <strong class="plus">+230 000 kr under marknad</strong><br/>
+          Modell: <strong>LightGBM + CatBoost Stack · R² 0.76</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bands -->
+    <div class="bands-list">
+      <div class="band-row">
+        <div class="band-color" style="background:var(--green)"></div>
+        <div class="band-text">
+          <div class="band-title">Köpvärd</div>
+          <div class="band-sub">Klart under marknadspris — starkt köpläge</div>
+        </div>
+        <div class="band-score" style="color:var(--green)">75–100</div>
+      </div>
+      <div class="band-row">
+        <div class="band-color" style="background:#34d399"></div>
+        <div class="band-text">
+          <div class="band-title">Intressant</div>
+          <div class="band-sub">Lite under marknad — värd en titt</div>
+        </div>
+        <div class="band-score" style="color:#34d399">55–74</div>
+      </div>
+      <div class="band-row">
+        <div class="band-color" style="background:var(--yellow)"></div>
+        <div class="band-text">
+          <div class="band-title">Marknadspris</div>
+          <div class="band-sub">Rättvist prissatt — normalt läge</div>
+        </div>
+        <div class="band-score" style="color:var(--yellow)">40–54</div>
+      </div>
+      <div class="band-row">
+        <div class="band-color" style="background:#f97316"></div>
+        <div class="band-text">
+          <div class="band-title">Överprissatt</div>
+          <div class="band-sub">Lite över marknad — förhandla hårt</div>
+        </div>
+        <div class="band-score" style="color:#f97316">20–39</div>
+      </div>
+      <div class="band-row">
+        <div class="band-color" style="background:var(--red)"></div>
+        <div class="band-text">
+          <div class="band-title">Undvik</div>
+          <div class="band-sub">Klart överprissatt — pass</div>
+        </div>
+        <div class="band-score" style="color:var(--red)">0–19</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── FEATURES ─── -->
+<div class="how-bg">
+  <div class="section-wrap" id="features">
+    <div class="center-text">
+      <div class="section-eyebrow" style="justify-content:center">
+        <div class="section-eyebrow-line"></div>
+        Funktioner
+        <div class="section-eyebrow-line" style="transform:scaleX(-1)"></div>
+      </div>
+      <h2>Allt du behöver<br/>för rätt beslut</h2>
+      <p class="section-desc">Systemet kombinerar maskininlärning, geografisk analys och realtidsdata för ett informationsövertag på marknaden.</p>
+    </div>
+
+    <div class="feature-grid-3d">
+      <div class="feat-card">
+        <div class="feat-icon">🔗</div>
+        <h3>Analysera URL</h3>
+        <p>Klistra in en Hemnet-URL och få direkt ML-estimat, SHAP waterfall-diagram och deal score — utan att mata in något manuellt.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">📊</div>
+        <h3>SHAP-förklaring</h3>
+        <p>Varje estimat åtföljs av ett waterfall-diagram som visar exakt vilka features som driver priset upp eller ner för just den bostaden.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">📍</div>
+        <h3>Geokodning & DeSO</h3>
+        <p>Avstånd till centrum, station och USÖ per bostad — plus SCB DeSO-data: medianinkomst, befolkning och åldersstruktur per område.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">📈</div>
+        <h3>Comps & grannskap</h3>
+        <p>Median pris/m² för liknande bostäder de senaste 90 dagarna och BallTree-baserade grannskap-features för spatial priskontext.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🔔</div>
+        <h3>Email-notiser</h3>
+        <p>Sätt filter på typ, område, maxpris och min deal score. Får du en match skickas automatiskt en email med alla detaljer.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🏘️</div>
+        <h3>Jämförbara försäljningar</h3>
+        <p>Visar de 5 mest liknande sålda bostäderna baserat på boarea, rum, ålder och område — direkt i analysvyn.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── MODELS ─── -->
+<div class="models-wrap">
+  <div class="section-wrap" id="modeller">
+    <div class="center-text">
+      <div class="section-eyebrow" style="justify-content:center">
+        <div class="section-eyebrow-line"></div>
+        Under huven
+        <div class="section-eyebrow-line" style="transform:scaleX(-1)"></div>
+      </div>
+      <h2>ML-modeller som<br/>tävlar om rätt svar</h2>
+      <p class="section-desc">Tre specialiserade modeller — en per bostadstyp — tränade med tidsbaserad split och Optuna hyperparameter-tuning. Villor och radhus använder ett LightGBM + CatBoost stacking-ensemble. Konfidensintervall (q10/q90) ingår i alla estimat.</p>
+    </div>
+
+    <div class="models-grid">
+      <div class="model-3d">
+        <div class="model-inner">
+          <div class="model-winner">Vinnare</div>
+          <div class="model-tag-chip" style="color:var(--cyan)">Lägenheter</div>
+          <h3>Random Forest</h3>
+          <p>Tunad Random Forest med Optuna. Robust mot outliers och hanterar icke-linjära samband — bäst för lägenheter.</p>
+          <div class="model-r2-bar">
+            <div class="r2-label"><span class="r2-name">R² (test)</span><span class="r2-val">0.95</span></div>
+            <div class="r2-track"><div class="r2-fill" style="width:95%"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="model-3d">
+        <div class="model-inner">
+          <div class="model-tag-chip" style="color:var(--cyan)">Villor · Stack</div>
+          <h3>LightGBM + CatBoost</h3>
+          <p>Stacking-ensemble med Ridge meta-modell. Optuna-tunede hyperparametrar, depth≤6 för att undvika overfit. BallTree grannskap + DeSO-features.</p>
+          <div class="model-r2-bar">
+            <div class="r2-label"><span class="r2-name">R² (test, stack)</span><span class="r2-val">0.76</span></div>
+            <div class="r2-track"><div class="r2-fill" style="width:76%"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="model-3d">
+        <div class="model-inner">
+          <div class="model-tag-chip" style="color:var(--cyan)">Radhus · Stack</div>
+          <h3>LightGBM + CatBoost</h3>
+          <p>Samma pipeline som villor men anpassad för radhus — inkluderar upplåtelseform (bostadsrätt vs äganderätt) och avgift per m² som nyckelfeatures.</p>
+          <div class="model-r2-bar">
+            <div class="r2-label"><span class="r2-name">R² (test, stack)</span><span class="r2-val">0.72</span></div>
+            <div class="r2-track"><div class="r2-fill" style="width:72%"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="model-3d">
+        <div class="model-inner">
+          <div class="model-tag-chip">Gemensamt · Alla modeller</div>
+          <h3>SHAP + Konfidensintervall</h3>
+          <p>Varje estimat levereras med SHAP-baserat waterfall-diagram (vad driver priset?) och q10/q90 konfidensintervall via separata quantile-modeller.</p>
+          <div class="model-r2-bar">
+            <div class="r2-label"><span class="r2-name">R² (span)</span><span class="r2-val">0.72–0.95</span></div>
+            <div class="r2-track"><div class="r2-fill" style="width:83%"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── PRICING ─── -->
+<div class="section-wrap" id="priser">
+  <div class="center-text">
+    <div class="section-eyebrow" style="justify-content:center">
+      <div class="section-eyebrow-line"></div>
+      Priser
+      <div class="section-eyebrow-line" style="transform:scaleX(-1)"></div>
+    </div>
+    <h2>Välj din plan</h2>
+    <p class="section-desc">Kom igång gratis. Uppgradera när du är redo att ta bostadsjakten på allvar.</p>
+  </div>
+
+  <div class="billing-toggle">
+    <span class="toggle-label active" id="lbl-monthly">Månadsvis</span>
+    <div class="toggle-switch" id="billing-toggle" onclick="toggleBilling()">
+      <div class="toggle-knob"></div>
+    </div>
+    <span class="toggle-label" id="lbl-yearly">Årsvis</span>
+    <span class="save-pill">Spara 20%</span>
+  </div>
+
+  <div class="pricing-grid">
+    <!-- FREE -->
+    <div class="price-card">
+      <div class="plan-tier">Free</div>
+      <div class="plan-name">Nybörjaren</div>
+      <p class="plan-desc">Känn på systemet. Perfekt för dig som precis börjat titta på marknaden.</p>
+      <div class="plan-price">
+        <span class="price-big">0</span>
+        <span class="price-unit">kr/mån</span>
+      </div>
+      <div class="price-note">&nbsp;</div>
+      <hr class="divider"/>
+      <ul class="feat-list">
+        <li><span class="fi part">◑</span><span>Livefynd<span class="fi-note">Max 5 nya annonser/dag</span></span></li>
+        <li><span class="fi part">◑</span><span>Deal Score<span class="fi-note">Band (Köpvärd/Neutral/Undvik), ej exakt poäng</span></span></li>
+        <li><span class="fi yes">✓</span><span>Prishistorik<span class="fi-note">Senaste 30 dagarna</span></span></li>
+        <li><span class="fi part">◑</span><span>Bevakningar<span class="fi-note">Max 2 aktiva sökfilter</span></span></li>
+        <li><span class="fi no">✗</span><span style="color:var(--muted)">Prisprediktering (ML)</span></li>
+        <li><span class="fi no">✗</span><span style="color:var(--muted)">Interaktiv karta</span></li>
+        <li><span class="fi no">✗</span><span style="color:var(--muted)">Marknadsanalys per område</span></li>
+        <li><span class="fi no">✗</span><span style="color:var(--muted)">Bolånekalkylator & scenarioanalys</span></li>
+      </ul>
+      <a href="#cta" class="plan-btn outline">Kom igång gratis</a>
+    </div>
+
+    <!-- PRO -->
+    <div class="price-card featured">
+      <div class="popular-ribbon">Mest populär</div>
+      <div class="plan-tier pro">Pro</div>
+      <div class="plan-name">Bostadsjägaren</div>
+      <p class="plan-desc">Allt du behöver för att hitta rätt bostad till rätt pris — och slå budgivningen.</p>
+      <div class="plan-price">
+        <span class="price-big" id="pro-price">249</span>
+        <span class="price-unit">kr/mån</span>
+      </div>
+      <div class="price-note" id="pro-annual">&nbsp;</div>
+      <hr class="divider"/>
+      <ul class="feat-list">
+        <li><span class="fi yes">✓</span><span>Obegränsade livefynd<span class="fi-note">Alla nya annonser i realtid</span></span></li>
+        <li><span class="fi yes">✓</span><span>Exakt Deal Score (0–100)<span class="fi-note">Med SHAP waterfall-förklaring per feature</span></span></li>
+        <li><span class="fi yes">✓</span><span>Prisprediktering (LightGBM + CatBoost stack)<span class="fi-note">Predikterat marknadspris, konfidensintervall q10/q90</span></span></li>
+        <li><span class="fi yes">✓</span><span>Interaktiv karta<span class="fi-note">Heatmap för pris/m², deal-score per område</span></span></li>
+        <li><span class="fi yes">✓</span><span>Marknadsanalys per område<span class="fi-note">Comps 90 dagar, pristrend, omsättningshastighet</span></span></li>
+        <li><span class="fi yes">✓</span><span>Deal Alerts<span class="fi-note">Push/e-post när score > ditt tröskelvärde</span></span></li>
+        <li><span class="fi yes">✓</span><span>Obegränsade bevakningar</span></li>
+        <li><span class="fi yes">✓</span><span>Prishistorik 24 månader</span></li>
+        <li><span class="fi no">✗</span><span style="color:var(--muted)">Bolånekalkylator & scenarioanalys</span></li>
+        <li><span class="fi no">✗</span><span style="color:var(--muted)">API-åtkomst & export</span></li>
+      </ul>
+      <a href="#cta" class="plan-btn glow">Starta Pro — 7 dagar gratis</a>
+    </div>
+
+    <!-- BUSINESS -->
+    <div class="price-card">
+      <div class="plan-tier biz">Business</div>
+      <div class="plan-name">Investeraren</div>
+      <p class="plan-desc">Full arsenalen för mäklare, investerare och de som vill ha ett totalt informationsövertag.</p>
+      <div class="plan-price">
+        <span class="price-big" id="biz-price">699</span>
+        <span class="price-unit">kr/mån</span>
+      </div>
+      <div class="price-note" id="biz-annual">&nbsp;</div>
+      <hr class="divider"/>
+      <ul class="feat-list">
+        <li><span class="fi yes">✓</span><span><strong>Allt i Pro</strong></span></li>
+        <li><span class="fi yes">✓</span><span>Bolånekalkylator<span class="fi-note">Månadskostand, ränta, amorteringsplan</span></span></li>
+        <li><span class="fi yes">✓</span><span>Scenarioanalys<span class="fi-note">Köp nu vs vänta · olika räntelägen · prisfall-10%</span></span></li>
+        <li><span class="fi yes">✓</span><span>ROI-kalkylator<span class="fi-note">Hyresintäkter, värdeutveckling, netto-yield</span></span></li>
+        <li><span class="fi yes">✓</span><span>Portföljanalys<span class="fi-note">Spåra flera fastigheter och deras värdeutveckling</span></span></li>
+        <li><span class="fi yes">✓</span><span>API-åtkomst<span class="fi-note">Integrera i egna system, JSON REST API</span></span></li>
+        <li><span class="fi yes">✓</span><span>Export PDF & Excel<span class="fi-note">Analysrapporter och rådata</span></span></li>
+        <li><span class="fi yes">✓</span><span>Prioriterad support<span class="fi-note">Svar inom 4 timmar på vardagar</span></span></li>
+        <li><span class="fi yes">✓</span><span>Fullständig prishistorik<span class="fi-note">Allt historiskt data sedan systemstart</span></span></li>
+      </ul>
+      <a href="#cta" class="plan-btn purple-btn">Starta Business — 14 dagar gratis</a>
+    </div>
+  </div>
+
+  <p style="text-align:center;margin-top:32px;font-size:0.76rem;color:var(--muted)">
+    Inga bindningstider · Avsluta när som helst · Priser inkl. moms
+  </p>
+</div>
+
+<!-- ─── CTA ─── -->
+<div class="cta-wrap" id="cta">
+  <div class="cta-bg"></div>
+  <div style="position:relative;z-index:1;">
+    <div class="section-eyebrow" style="justify-content:center;margin-bottom:20px">
+      <div class="section-eyebrow-line"></div>
+      Kom igång
+      <div class="section-eyebrow-line" style="transform:scaleX(-1)"></div>
+    </div>
+    <h2>Sluta gissa.<br/><span style="background:linear-gradient(90deg,var(--cyan),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Börja veta.</span></h2>
+    <p class="section-desc" style="margin:16px auto 44px;">ValuEstate ger dig ett objektivt underlag inför varje visning och bud. Enkel att använda, svår att slå.</p>
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
+      <a href="#hur" class="btn-glow">Utforska systemet →</a>
+      <a href="#features" class="btn-glass">Se alla funktioner</a>
+    </div>
+  </div>
+</div>
+
+<!-- ─── FOOTER ─── -->
+<footer>
+  <div class="footer-brand">ValuEstate</div>
+  <div>Byggd med LightGBM, CatBoost, Random Forest & Python · Örebro 2026</div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    Data: Hemnet
+    <div class="footer-dots">
+      <div class="fdot" style="background:var(--cyan)"></div>
+      <div class="fdot" style="background:var(--purple)"></div>
+      <div class="fdot" style="background:var(--green)"></div>
+    </div>
+    Modell: R² 0.72–0.95
+  </div>
+</footer>
+
+<script>
+  // ── Billing toggle ──────────────────────────────────────
+  let yearly = false;
+  function toggleBilling() {
+    yearly = !yearly;
+    const sw = document.getElementById('billing-toggle');
+    sw.classList.toggle('yearly', yearly);
+    document.getElementById('lbl-monthly').classList.toggle('active', !yearly);
+    document.getElementById('lbl-yearly').classList.toggle('active', yearly);
+    const proP = yearly ? Math.round(249 * 0.80) : 249;
+    const bizP = yearly ? Math.round(699 * 0.80) : 699;
+    document.getElementById('pro-price').textContent = proP;
+    document.getElementById('biz-price').textContent = bizP;
+    document.getElementById('pro-annual').innerHTML = yearly
+      ? `Faktureras <strong style="color:var(--text)">${proP*12} kr/år</strong> <span class="save">— du sparar ${249*12 - proP*12} kr</span>`
+      : '&nbsp;';
+    document.getElementById('biz-annual').innerHTML = yearly
+      ? `Faktureras <strong style="color:var(--text)">${bizP*12} kr/år</strong> <span class="save">— du sparar ${699*12 - bizP*12} kr</span>`
+      : '&nbsp;';
+  }
+
+  // ── Ring animations ─────────────────────────────────────
+  window.addEventListener('load', () => {
+    // Hero ring: 80/100 → dashoffset = 251*(1-0.80) = 50.2
+    setTimeout(() => {
+      const hr = document.getElementById('heroRing');
+      if (hr) hr.style.strokeDashoffset = '50';
+    }, 400);
+    // Deal ring: 80/100 → 502*(1-0.80) = 100.4
+    setTimeout(() => {
+      const dr = document.getElementById('dealRing');
+      if (dr) dr.style.strokeDashoffset = '100';
+    }, 600);
+  });
+
+  // ── 3D tilt hero card ───────────────────────────────────
+  const card3d = document.getElementById('card3d');
+  if (card3d) {
+    const parent = card3d.parentElement;
+    parent.addEventListener('mousemove', (e) => {
+      const rect = parent.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = (e.clientX - cx) / (rect.width / 2);
+      const dy = (e.clientY - cy) / (rect.height / 2);
+      const rotY = dx * 12;
+      const rotX = -dy * 8;
+      card3d.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;
+    });
+    parent.addEventListener('mouseleave', () => {
+      card3d.style.transform = 'rotateX(0deg) rotateY(0deg)';
+    });
+  }
+
+  // ── Step card 3D tilt ───────────────────────────────────
+  document.querySelectorAll('.step-3d').forEach(card => {
+    card.addEventListener('mousemove', (e) => {
+      const rect = card.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = (e.clientX - cx) / (rect.width / 2);
+      const dy = (e.clientY - cy) / (rect.height / 2);
+      const inner = card.querySelector('.step-inner');
+      inner.style.transform = `rotateX(${-dy * 10}deg) rotateY(${dx * 10}deg) translateY(-8px)`;
+      inner.style.borderColor = 'rgba(0,212,255,0.25)';
+      inner.style.boxShadow = '0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(0,212,255,0.08)';
+    });
+    card.addEventListener('mouseleave', () => {
+      const inner = card.querySelector('.step-inner');
+      inner.style.transform = '';
+      inner.style.borderColor = '';
+      inner.style.boxShadow = '';
+    });
+  });
+
+  // ── Particles ───────────────────────────────────────────
+  const pContainer = document.getElementById('particles');
+  const pColors = ['rgba(0,212,255,', 'rgba(168,85,247,', 'rgba(0,255,179,'];
+  for (let i = 0; i < 22; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = Math.random() * 3 + 1;
+    const color = pColors[Math.floor(Math.random() * pColors.length)];
+    const opacity = Math.random() * 0.4 + 0.1;
+    p.style.cssText = `
+      width:${size}px; height:${size}px;
+      background:${color}${opacity});
+      left:${Math.random() * 100}%;
+      animation-duration:${Math.random() * 20 + 15}s;
+      animation-delay:${Math.random() * 15}s;
+      box-shadow: 0 0 ${size * 4}px ${color}0.6);
+    `;
+    pContainer.appendChild(p);
+  }
+
+  // ── NavBar scroll style ──────────────────────────────────
+  window.addEventListener('scroll', () => {
+    const nav = document.querySelector('nav');
+    if (window.scrollY > 40) {
+      nav.style.background = 'rgba(4,8,15,0.92)';
+    } else {
+      nav.style.background = 'rgba(4,8,15,0.75)';
+    }
+  });
+</script>
+</body>
+</html>
